@@ -169,7 +169,11 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("Deve permitir requisições CORS do frontend local e dos deploys da Vercel")
     void devePermitirCorsDeOrigensConfiguradas() throws Exception {
-        for (String origem : List.of("http://localhost:4200", "https://product-module-interface-abc123.vercel.app")) {
+        for (String origem : List.of(
+                "http://localhost:4200",
+                "https://productmoduleinterface.vercel.app",
+                "https://productmoduleinterface-git-main-chat809.vercel.app",
+                "https://product-module-interface-abc123.vercel.app")) {
             mockMvc.perform(options(URL)
                             .header("Origin", origem)
                             .header("Access-Control-Request-Method", "POST"))

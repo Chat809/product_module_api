@@ -7,7 +7,7 @@
 
 API REST para gerenciamento de produtos (criação, consulta, atualização e remoção), desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java.
 
-**Teste online:** [Swagger UI no Render](https://product-module-api.onrender.com/swagger-ui.html)
+**Teste online:** [Swagger UI no Render](https://product-module-api.onrender.com/swagger-ui.html) | [Painel administrativo (Angular) na Vercel](https://productmoduleinterface.vercel.app) ([repositório do painel](https://github.com/Chat809/product_module_interface))
 
 ## Requisitos atendidos
 
@@ -195,7 +195,7 @@ Fluxo de uma requisição: `Controller → Service → DAOFactory/ProdutoDAO →
 - `PUT` substitui todos os dados do produto e retorna 404 se o id não existir (não cria o recurso, pois o id é gerado pelo banco).
 - `DELETE` de um produto já removido retorna 404.
 - A listagem não é paginada, pois o requisito pede a consulta de todos os produtos. A paginação é uma evolução natural caso o volume cresça.
-- CORS liberado apenas para `/api/**` e para as origens configuradas em `app.cors.allowed-origins` (`config/CorsConfig`): o frontend local (`http://localhost:4200`) e os deploys do painel na Vercel (`https://product-module-interface*.vercel.app`). Outras origens são recusadas.
+- CORS liberado apenas para `/api/**` e para as origens configuradas em `app.cors.allowed-origins` (`config/CorsConfig`): o frontend local (`http://localhost:4200`) e os deploys do painel na Vercel (`https://productmoduleinterface*.vercel.app` e `https://product-module-interface*.vercel.app`). Outras origens são recusadas.
 - A API é versionada pela URL (`/api/v1`), permitindo evoluir o contrato sem quebrar clientes.
 
 ## Deploy no Render
@@ -227,5 +227,6 @@ docker run -p 8080:8080 produtos-api
 | API | https://product-module-api.onrender.com/api/v1/produtos |
 | Swagger UI | https://product-module-api.onrender.com/swagger-ui.html |
 | Health check | https://product-module-api.onrender.com/actuator/health |
+| Painel administrativo (frontend) | https://productmoduleinterface.vercel.app |
 
 No plano gratuito, a primeira requisição após um período sem uso pode levar cerca de um minuto enquanto o serviço inicia.
