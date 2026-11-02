@@ -2,7 +2,7 @@
 
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen)
-![Testes](https://img.shields.io/badge/testes-28%20passando-success)
+![Testes](https://img.shields.io/badge/testes-30%20passando-success)
 ![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-100%25-success)
 
 API REST para gerenciamento de produtos (criação, consulta, atualização e remoção), desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java.
@@ -195,7 +195,7 @@ Fluxo de uma requisição: `Controller → Service → DAOFactory/ProdutoDAO →
 - `PUT` substitui todos os dados do produto e retorna 404 se o id não existir (não cria o recurso, pois o id é gerado pelo banco).
 - `DELETE` de um produto já removido retorna 404.
 - A listagem não é paginada, pois o requisito pede a consulta de todos os produtos. A paginação é uma evolução natural caso o volume cresça.
-- CORS não foi configurado, pois não há frontend consumindo a API.
+- CORS liberado apenas para `/api/**` e para as origens configuradas em `app.cors.allowed-origins` (`config/CorsConfig`): o frontend local (`http://localhost:4200`) e os deploys do painel na Vercel (`https://product-module-interface*.vercel.app`). Outras origens são recusadas.
 - A API é versionada pela URL (`/api/v1`), permitindo evoluir o contrato sem quebrar clientes.
 
 ## Deploy no Render
@@ -206,6 +206,7 @@ O projeto inclui um `Dockerfile` multi-stage (build com JDK 21 e execução com 
 2. Selecione o runtime **Docker** (o `Dockerfile` da raiz é detectado automaticamente).
 3. Em **Health Check Path**, informe `/actuator/health`.
 4. Não é necessário definir variáveis de ambiente: a porta é lida da variável `PORT` fornecida pelo Render.
+5. Opcional: para liberar o CORS para outro domínio de frontend, defina `CORS_ALLOWED_ORIGINS` com as origens separadas por vírgula (por exemplo, `http://localhost:4200,https://meu-painel.vercel.app`). O valor substitui a lista padrão.
 
 Limitações do plano gratuito:
 

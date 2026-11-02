@@ -24,6 +24,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -163,6 +164,27 @@ class ProdutoControllerTest {
 
         mockMvc.perform(delete(URL + "/99"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Deve permitir requisições CORS do frontend local e dos deploys da Vercel")
+    void devePermitirCorsDeOrigensConfiguradas() throws Exception {
+        for (String origem : List.of("http://localhost:4200", "https://product-module-interface-abc123.vercel.app")) {
+            mockMvc.perform(options(URL)
+                            .header("Origin", origem)
+                            .header("Access-Control-Request-Method", "POST"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Access-Control-Allow-Origin", origem));
+        }
+    }
+
+    @Test
+    @DisplayName("Deve recusar requisições CORS de origens não configuradas")
+    void deveRecusarCorsDeOrigemNaoConfigurada() throws Exception {
+        mockMvc.perform(options(URL)
+                        .header("Origin", "https://site-desconhecido.com")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
