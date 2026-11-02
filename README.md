@@ -7,6 +7,8 @@
 
 API REST para gerenciamento de produtos (criação, consulta, atualização e remoção), desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java.
 
+**Teste online:** [Swagger UI no Render](https://product-module-api.onrender.com/swagger-ui.html)
+
 ## Requisitos atendidos
 
 | Requisito do teste | Onde está |
@@ -217,4 +219,12 @@ docker build -t produtos-api .
 docker run -p 8080:8080 produtos-api
 ```
 
-API publicada: _link a ser adicionado após o deploy._
+## API publicada
+
+| Recurso | URL |
+|---|---|
+| API | https://product-module-api.onrender.com/api/v1/produtos |
+| Swagger UI | https://product-module-api.onrender.com/swagger-ui.html |
+| Health check | https://product-module-api.onrender.com/actuator/health |
+
+No plano gratuito, a primeira requisição após um período sem uso pode levar cerca de um minuto enquanto o serviço inicia.
