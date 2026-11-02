@@ -1,0 +1,14 @@
+target/
+.git/
+.gitignore
+.gitattributes
+*.pdf
+*.md
+Dockerfile
+.dockerignore
+.idea/
+.vscode/
+.settings/
+.project
+.classpath
+*.iml
