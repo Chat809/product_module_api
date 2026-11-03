@@ -124,6 +124,15 @@ public class SupabaseAuthClient {
                 "Sessão expirada. Faça login novamente.");
     }
 
+    /**
+     * Troca o código do retorno do Google pela sessão. O Supabase só aceita se o hash do verificador
+     * bater com o code_challenge do início do login, então um código interceptado não serve sozinho.
+     */
+    public SessaoAuth trocarCodigo(String codigo, String verificador) {
+        return pedirToken("pkce", Map.of("auth_code", codigo, "code_verifier", verificador),
+                "Login com Google expirado ou inválido. Tente novamente.");
+    }
+
     private SessaoAuth pedirToken(String grantType, Map<String, String> corpo, String mensagemDeRecusa) {
         exigirConfiguracao();
         try {
@@ -134,7 +143,8 @@ public class SupabaseAuthClient {
                     .retrieve()
                     .body(SessaoAuth.class);
         } catch (HttpClientErrorException ex) {
-            if (ex.getStatusCode().value() == 400 || ex.getStatusCode().value() == 401) {
+            int status = ex.getStatusCode().value();
+            if (status == 400 || status == 401 || status == 403 || status == 404 || status == 422) {
                 throw new CredenciaisInvalidasException(mensagemDeRecusa);
             }
             throw indisponivel(ex);

@@ -171,6 +171,43 @@ class SupabaseAuthClientTest {
     }
 
     @Test
+    @DisplayName("Deve trocar o código do Google pela sessão no fluxo PKCE")
+    void deveTrocarCodigoDoGoogle() {
+        servidor.expect(requestTo(URL + "/auth/v1/token?grant_type=pkce"))
+                .andExpect(method(POST))
+                .andExpect(header("apikey", CHAVE))
+                .andExpect(content().json("{\"auth_code\": \"codigo-google\", \"code_verifier\": \"verificador\"}",
+                        JsonCompareMode.STRICT))
+                .andRespond(withSuccess(SESSAO, MediaType.APPLICATION_JSON));
+
+        SessaoAuth sessao = client.trocarCodigo("codigo-google", "verificador");
+
+        assertThat(sessao.accessToken()).isEqualTo("token-acesso");
+        assertThat(sessao.user().email()).isEqualTo("maria@exemplo.com");
+    }
+
+    @Test
+    @DisplayName("Código do Google expirado, já usado ou com verificador errado vira CredenciaisInvalidasException")
+    void deveRecusarCodigoDoGoogle() {
+        servidor.expect(requestTo(URL + "/auth/v1/token?grant_type=pkce"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"flow_state_not_found\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/token?grant_type=pkce"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"bad_code_verifier\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/token?grant_type=pkce"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"flow_state_expired\"}"));
+
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> client.trocarCodigo("codigo", "verificador"))
+                    .isInstanceOf(CredenciaisInvalidasException.class)
+                    .hasMessage("Login com Google expirado ou inválido. Tente novamente.");
+        }
+        servidor.verify();
+    }
+
+    @Test
     @DisplayName("Limite de requisições e erro 5xx viram serviço indisponível")
     void deveTratarFalhasDoSupabase() {
         servidor.expect(requestTo(URL + "/auth/v1/token?grant_type=password"))

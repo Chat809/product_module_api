@@ -3,6 +3,7 @@ package br.com.triboraizes.produtosapi.service;
 import br.com.triboraizes.produtosapi.client.SupabaseAuthClient;
 import br.com.triboraizes.produtosapi.client.SupabaseAuthClient.SessaoAuth;
 import br.com.triboraizes.produtosapi.client.SupabaseAuthClient.UsuarioAuth;
+import br.com.triboraizes.produtosapi.dto.GoogleLoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.LoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.RegistroRequestDTO;
 import br.com.triboraizes.produtosapi.dto.SessaoDTO;
@@ -67,6 +68,35 @@ class AuthServiceTest {
         assertThat(sessao.refreshToken()).isEqualTo("renovacao");
         assertThat(sessao.expiraEm()).isEqualTo(Instant.ofEpochSecond(1793707200L));
         assertThat(sessao.usuario().id()).isEqualTo(ID);
+        assertThat(sessao.usuario().papel()).isEqualTo(Papel.ADMIN);
+        assertThat(sessao.usuario().acessos()).containsExactly("*");
+    }
+
+    @Test
+    @DisplayName("Login com Google deve trocar o código e usar o nome do perfil do Google")
+    void deveEntrarComGoogle() {
+        String verificador = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        when(authClient.trocarCodigo("codigo-google", verificador))
+                .thenReturn(sessao(Map.of("provider", "google", "papel", "USUARIO", "acessos", List.of("dashboard")),
+                        Map.of("full_name", "Maria Souza", "name", "Maria S.")));
+
+        SessaoDTO sessao = authService.entrarComGoogle(new GoogleLoginRequestDTO("codigo-google", verificador));
+
+        assertThat(sessao.accessToken()).isEqualTo("acesso");
+        assertThat(sessao.usuario().nome()).isEqualTo("Maria Souza");
+        assertThat(sessao.usuario().acessos()).containsExactly("dashboard");
+    }
+
+    @Test
+    @DisplayName("Conta com senha vinculada ao Google mantém o nome do cadastro e o papel de admin")
+    void deveManterContaExistenteNoLoginComGoogle() {
+        when(authClient.trocarCodigo("codigo", "v".repeat(43)))
+                .thenReturn(sessao(Map.of("papel", "ADMIN", "acessos", List.of("*")),
+                        Map.of("nome", "Maria", "full_name", "Maria Souza", "name", " ")));
+
+        SessaoDTO sessao = authService.entrarComGoogle(new GoogleLoginRequestDTO("codigo", "v".repeat(43)));
+
+        assertThat(sessao.usuario().nome()).isEqualTo("Maria");
         assertThat(sessao.usuario().papel()).isEqualTo(Papel.ADMIN);
         assertThat(sessao.usuario().acessos()).containsExactly("*");
     }

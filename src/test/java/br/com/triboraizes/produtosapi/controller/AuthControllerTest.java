@@ -1,6 +1,7 @@
 package br.com.triboraizes.produtosapi.controller;
 
 import br.com.triboraizes.produtosapi.config.SecurityConfig;
+import br.com.triboraizes.produtosapi.dto.GoogleLoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.LoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.RegistroRequestDTO;
 import br.com.triboraizes.produtosapi.dto.SessaoDTO;
@@ -37,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerTest {
 
     private static final String URL = "/api/v1/auth";
+    private static final String VERIFICADOR = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 
     private static final SessaoDTO SESSAO = new SessaoDTO("acesso", "renovacao", Instant.parse("2026-11-03T13:00:00Z"),
             new UsuarioDTO(UUID.fromString("6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e"), "Maria", "maria@exemplo.com",
@@ -121,6 +123,41 @@ class AuthControllerTest {
                         .content("{\"email\": \"maria@exemplo.com\", \"senha\": \"segredo1\"}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.title").value("Serviço de usuários indisponível"));
+    }
+
+    @Test
+    @DisplayName("POST /google deve trocar código e verificador pela sessão, sem token")
+    void deveEntrarComGoogle() throws Exception {
+        when(authService.entrarComGoogle(new GoogleLoginRequestDTO("codigo-google", VERIFICADOR))).thenReturn(SESSAO);
+
+        mockMvc.perform(post(URL + "/google").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codigo\": \"codigo-google\", \"verificador\": \"" + VERIFICADOR + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("acesso"))
+                .andExpect(jsonPath("$.usuario.acessos", hasSize(2)));
+    }
+
+    @Test
+    @DisplayName("POST /google deve validar o código e o tamanho do verificador")
+    void deveValidarLoginComGoogle() throws Exception {
+        mockMvc.perform(post(URL + "/google").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codigo\": \"\", \"verificador\": \"curto\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros", hasSize(2)));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("POST /google deve devolver 401 quando o código expirou ou já foi usado")
+    void deveRecusarCodigoDoGoogleExpirado() throws Exception {
+        when(authService.entrarComGoogle(any(GoogleLoginRequestDTO.class)))
+                .thenThrow(new CredenciaisInvalidasException("Login com Google expirado ou inválido. Tente novamente."));
+
+        mockMvc.perform(post(URL + "/google").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codigo\": \"usado\", \"verificador\": \"" + VERIFICADOR + "\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Login com Google expirado ou inválido. Tente novamente."));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package br.com.triboraizes.produtosapi.controller;
 
+import br.com.triboraizes.produtosapi.dto.GoogleLoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.LoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.RefreshRequestDTO;
 import br.com.triboraizes.produtosapi.dto.RegistroRequestDTO;
@@ -24,12 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.CREDENCIAIS_INVALIDAS;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.DADOS_INVALIDOS;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.EMAIL_JA_CADASTRADO;
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.GOOGLE_EXPIRADO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.PROBLEM_JSON;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.SERVICO_INDISPONIVEL;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Autenticação", description = "Registro, login e renovação de sessão (rotas públicas)")
+@Tag(name = "Autenticação", description = "Registro, login com senha ou Google e renovação de sessão (rotas públicas)")
 @SecurityRequirements
 public class AuthController {
 
@@ -71,6 +73,27 @@ public class AuthController {
                     examples = @ExampleObject(value = SERVICO_INDISPONIVEL)))
     public SessaoDTO entrar(@Valid @RequestBody LoginRequestDTO request) {
         return authService.entrar(request);
+    }
+
+    @PostMapping("/google")
+    @Operation(summary = "Conclui o login com Google e abre a sessão",
+            description = """
+                    O painel manda a pessoa para o Google pelo Supabase (fluxo PKCE) e recebe um `code` no retorno. \
+                    Este endpoint troca o `code` e o `verificador` pela mesma sessão do login com senha. \
+                    Se já existe conta com o e-mail do Google, a pessoa entra nela, com papel e acessos preservados; \
+                    se não existe, a conta é criada como USUARIO com os acessos padrão.""")
+    @ApiResponse(responseCode = "200", description = "Sessão aberta")
+    @ApiResponse(responseCode = "400", description = "Campos inválidos",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = DADOS_INVALIDOS)))
+    @ApiResponse(responseCode = "401", description = "Código expirado, já usado ou verificador que não confere",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = GOOGLE_EXPIRADO)))
+    @ApiResponse(responseCode = "503", description = "Supabase indisponível ou não configurado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = SERVICO_INDISPONIVEL)))
+    public SessaoDTO entrarComGoogle(@Valid @RequestBody GoogleLoginRequestDTO request) {
+        return authService.entrarComGoogle(request);
     }
 
     @PostMapping("/refresh")

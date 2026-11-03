@@ -73,6 +73,14 @@ final class ExemplosDeErro {
               "instance": "/api/v1/auth/login"
             }""";
 
+    static final String GOOGLE_EXPIRADO = """
+            {
+              "title": "Credenciais inválidas",
+              "status": 401,
+              "detail": "Login com Google expirado ou inválido. Tente novamente.",
+              "instance": "/api/v1/auth/google"
+            }""";
+
     static final String EMAIL_JA_CADASTRADO = """
             {
               "title": "E-mail já cadastrado",
