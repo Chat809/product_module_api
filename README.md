@@ -3,7 +3,7 @@
 [![CI](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen)
-![Testes](https://img.shields.io/badge/testes-239%20passando-success)
+![Testes](https://img.shields.io/badge/testes-250%20passando-success)
 ![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-98%25-success)
 
 API REST de produtos e estoque feita para o teste técnico de Desenvolvedor Backend Java. Cumpre o que o PDF pede (CRUD de produtos com Spring Boot, H2, DAO, Factory, DTO e testes dos serviços) e, a partir de sugestões feitas durante o desenvolvimento, ganhou autenticação, acessos por módulo, gestão de usuários, perfil com foto, demandas em Kanban e um módulo financeiro.
@@ -134,11 +134,13 @@ Produtos ficam no H2, como o PDF pede. Tudo o que precisa sobreviver a um reiní
 
 ### 7. Gestão de usuários pelo admin
 
-**O que faz:** o administrador lista as contas e edita nome, e-mail, departamento, cargo, nível de acesso, acessos, foto e senha de qualquer uma.
+**O que faz:** o administrador lista, cria e exclui contas e edita nome, e-mail, departamento, cargo, nível de acesso, acessos, foto e senha de qualquer uma.
 
 | Método | Rota | Descrição |
 |---|---|---|
 | `GET` | `/api/v1/usuarios?page=0&size=20` | Lista com departamento, cargo (`funcao`), nível de acesso (`papel`), acessos e foto |
+| `POST` | `/api/v1/usuarios` | `{ nome, email, senha, papel, acessos, departamento, funcao }` → 201 com `Location`; senha de 6 a 72 caracteres; e-mail já cadastrado → 409 |
+| `DELETE` | `/api/v1/usuarios/{id}` | Exclui a conta (e a foto) → 204; o admin não pode excluir a si mesmo → 422. Demandas e lançamentos criados por ela ficam, sem autor |
 | `PUT` | `/api/v1/usuarios/{id}` | `{ nome, email, papel, acessos, departamento, funcao }`; departamento e cargo até 80 caracteres, vazios viram `null`; e-mail de outra conta → 409; admin rebaixando a si mesmo → 422 |
 | `PUT` | `/api/v1/usuarios/{id}/avatar` | Troca a foto da pessoa; mesmas regras de `/usuarios/me/avatar` |
 | `DELETE` | `/api/v1/usuarios/{id}/avatar` | Remove a foto da pessoa |
@@ -245,7 +247,7 @@ Sem a chave, a aplicação sobe, mas login e os módulos do Supabase respondem 5
 ./mvnw clean verify             # Windows: .\mvnw.cmd clean verify
 ```
 
-São 239 testes. O build gera `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje em 98%). Nenhum teste acessa o Supabase: as chamadas HTTP são simuladas com `MockRestServiceServer`.
+São 250 testes. O build gera `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje em 98%). Nenhum teste acessa o Supabase: as chamadas HTTP são simuladas com `MockRestServiceServer`.
 
 | Classe de teste | O que cobre |
 |---|---|
@@ -255,7 +257,7 @@ São 239 testes. O build gera `target/site/jacoco/index.html` e **falha se a cob
 | `JpaProdutoDAOTest`, `JpaMovimentacaoDAOTest` | Consultas JPQL, auditoria, versão e agregados no H2 real (`@DataJpaTest`) |
 | `AuthControllerTest`, `AuthServiceTest`, `SupabaseAuthClientTest` | Registro, login, Google, refresh; corpo enviado ao Supabase e tradução de cada erro |
 | `FalhaDoSupabaseTest` | Falhas do Supabase registradas no log só pelo status ou tipo, sem corpo nem URL |
-| `UsuarioControllerTest`, `UsuarioServiceTest`, `SupabasePerfilDAOTest` | Lista, edição com departamento e cargo, foto pelo admin, nova senha, `/opcoes`; PostgREST, `Content-Range` e colunas do perfil |
+| `UsuarioControllerTest`, `UsuarioServiceTest`, `SupabasePerfilDAOTest` | Lista, criação e exclusão de contas, edição com departamento e cargo, foto pelo admin, nova senha, `/opcoes`; PostgREST, `Content-Range` e colunas do perfil |
 | `PermissoesDoTokenConverterTest`, `AcessosTest` | `ROLE_*` e `MODULO_*` a partir do token; forma canônica dos acessos e padrão de conta nova |
 | `MeuPerfilControllerTest`, `MeuPerfilServiceTest`, `AvatarServiceTest`, `SupabaseStorageClientTest`, `FormatoDeImagemTest` | `/usuarios/me`, multipart, 413, imagem falsa recusada, troca e remoção da foto no Storage |
 | `DemandaControllerTest`, `DemandaServiceTest`, `SupabaseDemandaDAOTest` | Filtros, `responsavel=me`, criação no fim da coluna, mover pela função, exclusão só do autor ou admin |

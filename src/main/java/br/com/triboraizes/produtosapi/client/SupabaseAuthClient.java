@@ -55,11 +55,11 @@ public class SupabaseAuthClient {
         this.properties = properties;
     }
 
-    /** Cria o usuário já com o e-mail confirmado, para que possa entrar logo em seguida. */
-    public void criarUsuario(String nome, String email, String senha) {
+    /** Cria o usuário já com o e-mail confirmado, para que possa entrar logo em seguida. Devolve o id criado. */
+    public UUID criarUsuario(String nome, String email, String senha) {
         exigirConfiguracao();
         try {
-            restClient.post()
+            UsuarioAuth criado = restClient.post()
                     .uri("/auth/v1/admin/users")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
@@ -68,9 +68,28 @@ public class SupabaseAuthClient {
                             "email_confirm", true,
                             "user_metadata", Map.of("nome", nome)))
                     .retrieve()
-                    .toBodilessEntity();
+                    .body(UsuarioAuth.class);
+            return criado == null ? null : criado.id();
         } catch (HttpClientErrorException ex) {
             throw traduzir(ex, email);
+        } catch (RestClientException ex) {
+            throw indisponivel(ex);
+        }
+    }
+
+    /** Apaga a conta no Auth; o perfil sai junto (cascade) e o que a pessoa criou fica sem autor (set null). */
+    public void excluirUsuario(UUID id) {
+        exigirConfiguracao();
+        try {
+            restClient.delete()
+                    .uri("/auth/v1/admin/users/{id}", id)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                throw new UsuarioNaoEncontradoException(id);
+            }
+            throw traduzir(ex, null);
         } catch (RestClientException ex) {
             throw indisponivel(ex);
         }

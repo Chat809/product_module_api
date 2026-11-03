@@ -29,6 +29,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.HttpMethod.PUT;
 
@@ -70,9 +71,37 @@ class SupabaseAuthClientTest {
                         """))
                 .andRespond(withSuccess("{\"id\": \"" + ID + "\"}", MediaType.APPLICATION_JSON));
 
-        client.criarUsuario("Maria", "maria@exemplo.com", "segredo1");
+        assertThat(client.criarUsuario("Maria", "maria@exemplo.com", "segredo1")).isEqualTo(ID);
 
         servidor.verify();
+    }
+
+    @Test
+    @DisplayName("Deve excluir a conta no Auth; 404 vira UsuarioNaoEncontradoException")
+    void deveExcluirUsuario() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andExpect(method(DELETE))
+                .andExpect(header("apikey", CHAVE))
+                .andRespond(withSuccess());
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"user_not_found\", \"msg\": \"User not found\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withServerError());
+
+        client.excluirUsuario(ID);
+        assertThatThrownBy(() -> client.excluirUsuario(ID)).isInstanceOf(UsuarioNaoEncontradoException.class);
+        assertThatThrownBy(() -> client.excluirUsuario(ID)).isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
+        servidor.verify();
+    }
+
+    @Test
+    @DisplayName("Erro de cliente inesperado ao excluir é tratado como serviço indisponível")
+    void deveTratarRecusaAoExcluir() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).body("invalid api key"));
+
+        assertThatThrownBy(() -> client.excluirUsuario(ID)).isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
     }
 
     @Test

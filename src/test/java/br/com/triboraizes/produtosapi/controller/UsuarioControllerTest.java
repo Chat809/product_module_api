@@ -2,6 +2,7 @@ package br.com.triboraizes.produtosapi.controller;
 
 import br.com.triboraizes.produtosapi.config.SecurityConfig;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
+import br.com.triboraizes.produtosapi.dto.CriarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
@@ -30,6 +31,7 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -37,8 +39,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -217,6 +221,51 @@ class UsuarioControllerTest {
                 .andExpect(status().isOk());
 
         verify(usuarioService).removerAvatar(OUTRO, ADMIN);
+    }
+
+    @Test
+    @DisplayName("POST /usuarios deve criar e responder 201 com Location")
+    void deveCriar() throws Exception {
+        CriarUsuarioRequestDTO pedido = new CriarUsuarioRequestDTO("Maria", "maria@exemplo.com", "senhaInicial1",
+                Papel.USUARIO, List.of("dashboard"), "Tecnologia", null);
+        when(usuarioService.criar(pedido, ADMIN)).thenReturn(USUARIO);
+
+        mockMvc.perform(post(URL).with(comoAdmin()).contentType(MediaType.APPLICATION_JSON).content("""
+                        {"nome": "Maria", "email": "maria@exemplo.com", "senha": "senhaInicial1",
+                         "papel": "USUARIO", "acessos": ["dashboard"], "departamento": "Tecnologia"}
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "http://localhost" + URL + "/" + OUTRO))
+                .andExpect(jsonPath("$.id").value(OUTRO.toString()));
+    }
+
+    @Test
+    @DisplayName("POST /usuarios deve validar o corpo e bloquear quem não é ADMIN")
+    void deveValidarCriacao() throws Exception {
+        mockMvc.perform(post(URL).with(comoAdmin()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\": \"Maria\", \"email\": \"maria@exemplo.com\", \"senha\": \"123\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros", hasSize(3)));
+        mockMvc.perform(post(URL).with(comoUsuario()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(usuarioService);
+    }
+
+    @Test
+    @DisplayName("DELETE /{id} deve excluir (204), recusar a própria conta (422) e bloquear quem não é ADMIN")
+    void deveExcluir() throws Exception {
+        doThrow(new OperacaoNaoPermitidaException("Você não pode excluir a sua própria conta"))
+                .when(usuarioService).excluir(ADMIN, ADMIN);
+
+        mockMvc.perform(delete(URL + "/" + OUTRO).with(comoAdmin()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(URL + "/" + ADMIN).with(comoAdmin()))
+                .andExpect(status().isUnprocessableContent());
+        mockMvc.perform(delete(URL + "/" + ADMIN).with(comoUsuario()))
+                .andExpect(status().isForbidden());
+
+        verify(usuarioService).excluir(OUTRO, ADMIN);
     }
 
     @Test

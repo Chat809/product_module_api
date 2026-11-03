@@ -3,11 +3,13 @@ package br.com.triboraizes.produtosapi.service;
 import br.com.triboraizes.produtosapi.client.SupabaseAuthClient;
 import br.com.triboraizes.produtosapi.dao.PerfilDAO;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
+import br.com.triboraizes.produtosapi.dto.CriarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
+import br.com.triboraizes.produtosapi.exception.ServicoDeUsuariosIndisponivelException;
 import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
 import br.com.triboraizes.produtosapi.model.Papel;
 import br.com.triboraizes.produtosapi.model.Perfil;
@@ -26,6 +28,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -225,6 +228,76 @@ class UsuarioServiceTest {
         assertThat(comAvatar.departamento()).isEqualTo("Tecnologia");
         assertThat(comAvatar.funcao()).isEqualTo("Desenvolvedora");
         assertThat(usuarioService.removerAvatar(OUTRO, ADMIN).avatarUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("Deve criar a conta no Auth e gravar nível, acessos, departamento e cargo no perfil")
+    void deveCriarUsuario() {
+        when(authClient.criarUsuario("Maria Souza", "maria@exemplo.com", "senhaInicial1")).thenReturn(OUTRO);
+        PerfilDAO.DadosDoUsuario esperado = new PerfilDAO.DadosDoUsuario(
+                "Maria Souza", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"), "Tecnologia", null);
+        when(perfilDAO.atualizar(OUTRO, esperado)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO, List.of("dashboard"))));
+
+        UsuarioDTO criado = usuarioService.criar(new CriarUsuarioRequestDTO(" Maria Souza ", " Maria@Exemplo.com ",
+                "senhaInicial1", Papel.USUARIO, List.of("dashboard"), " Tecnologia ", " "), ADMIN);
+
+        assertThat(criado.id()).isEqualTo(OUTRO);
+        verify(perfilDAO).atualizar(OUTRO, esperado);
+    }
+
+    @Test
+    @DisplayName("Acesso inválido na criação é recusado antes de criar a conta")
+    void deveRecusarAcessoInvalidoNaCriacao() {
+        assertThatThrownBy(() -> usuarioService.criar(new CriarUsuarioRequestDTO("Maria", "maria@exemplo.com",
+                "senhaInicial1", Papel.USUARIO, List.of("usuarios"), null, null), ADMIN))
+                .isInstanceOf(RequisicaoInvalidaException.class);
+        verifyNoInteractions(authClient, perfilDAO);
+    }
+
+    @Test
+    @DisplayName("Sem id da conta criada, ou sem o perfil gerado, a criação falha com erro claro")
+    void deveFalharSemContaOuPerfil() {
+        CriarUsuarioRequestDTO pedido = new CriarUsuarioRequestDTO("Maria", "maria@exemplo.com",
+                "senhaInicial1", Papel.ADMIN, List.of(), null, null);
+        when(authClient.criarUsuario("Maria", "maria@exemplo.com", "senhaInicial1")).thenReturn(null, OUTRO);
+        when(perfilDAO.atualizar(OUTRO, new PerfilDAO.DadosDoUsuario(
+                "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*"), null, null))).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> usuarioService.criar(pedido, ADMIN)).isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
+        assertThatThrownBy(() -> usuarioService.criar(pedido, ADMIN)).isInstanceOf(UsuarioNaoEncontradoException.class);
+    }
+
+    @Test
+    @DisplayName("Deve apagar a foto e depois a conta no Auth")
+    void deveExcluirComFoto() {
+        Perfil comFoto = new Perfil(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*"), CRIADO,
+                null, null, null, "https://x/a.png", null);
+        when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(comFoto));
+
+        usuarioService.excluir(OUTRO, ADMIN);
+
+        var ordem = inOrder(avatarService, authClient);
+        ordem.verify(avatarService).remover(OUTRO);
+        ordem.verify(authClient).excluirUsuario(OUTRO);
+    }
+
+    @Test
+    @DisplayName("Sem foto, exclui só a conta; inexistente responde 404")
+    void deveExcluirSemFoto() {
+        when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)), Optional.empty());
+
+        usuarioService.excluir(OUTRO, ADMIN);
+        assertThatThrownBy(() -> usuarioService.excluir(OUTRO, ADMIN)).isInstanceOf(UsuarioNaoEncontradoException.class);
+
+        verify(authClient).excluirUsuario(OUTRO);
+        verifyNoInteractions(avatarService);
+    }
+
+    @Test
+    @DisplayName("Admin não pode excluir a própria conta")
+    void naoDeveExcluirASiMesmo() {
+        assertThatThrownBy(() -> usuarioService.excluir(ADMIN, ADMIN)).isInstanceOf(OperacaoNaoPermitidaException.class);
+        verifyNoInteractions(perfilDAO, authClient, avatarService);
     }
 
     private static AtualizarUsuarioRequestDTO pedido(String nome, String email, Papel papel, List<String> acessos) {

@@ -1,6 +1,7 @@
 package br.com.triboraizes.produtosapi.controller;
 
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
+import br.com.triboraizes.produtosapi.dto.CriarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.RedefinirSenhaRequestDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
@@ -17,11 +18,13 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,8 +33,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -81,6 +86,49 @@ public class UsuarioController {
             @Parameter(description = "Índice da página, começando em 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Itens por página (1 a 100)") @RequestParam(defaultValue = "20") int size) {
         return usuarioService.listar(page, size);
+    }
+
+    @PostMapping
+    @Operation(summary = "Cria um usuário com nome, e-mail e senha (somente ADMIN)",
+            description = "A conta já nasce com o e-mail confirmado, então a pessoa pode entrar na hora. "
+                    + "Nível de acesso, acessos, departamento e cargo seguem as mesmas regras da edição.")
+    @ApiResponse(responseCode = "201", description = "Usuário criado; o header Location aponta para ele")
+    @ApiResponse(responseCode = "400", description = "Campos inválidos, senha fora das regras ou acesso desconhecido",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = DADOS_INVALIDOS)))
+    @ApiResponse(responseCode = "403", description = "Usuário sem papel ADMIN",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_NEGADO)))
+    @ApiResponse(responseCode = "409", description = "O e-mail já pertence a outra conta",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = EMAIL_JA_CADASTRADO)))
+    public ResponseEntity<UsuarioDTO> criar(@Valid @RequestBody CriarUsuarioRequestDTO request,
+                                            @AuthenticationPrincipal Jwt jwt) {
+        UsuarioDTO criado = usuarioService.criar(request, UUID.fromString(jwt.getSubject()));
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(criado.id())
+                .toUri();
+        return ResponseEntity.created(location).body(criado);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Exclui um usuário (somente ADMIN)",
+            description = "Apaga a conta no Supabase Auth, o perfil e a foto. Demandas e contas criadas pela pessoa "
+                    + "continuam, sem autor. O admin não pode excluir a própria conta.")
+    @ApiResponse(responseCode = "204", description = "Usuário excluído")
+    @ApiResponse(responseCode = "403", description = "Usuário sem papel ADMIN",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_NEGADO)))
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = USUARIO_NAO_ENCONTRADO)))
+    @ApiResponse(responseCode = "422", description = "Admin tentando excluir a própria conta",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = OPERACAO_NAO_PERMITIDA)))
+    public void excluir(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        usuarioService.excluir(id, UUID.fromString(jwt.getSubject()));
     }
 
     @PutMapping("/{id}")

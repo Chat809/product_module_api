@@ -3,11 +3,13 @@ package br.com.triboraizes.produtosapi.service;
 import br.com.triboraizes.produtosapi.client.SupabaseAuthClient;
 import br.com.triboraizes.produtosapi.dao.PerfilDAO;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
+import br.com.triboraizes.produtosapi.dto.CriarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
+import br.com.triboraizes.produtosapi.exception.ServicoDeUsuariosIndisponivelException;
 import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
 import br.com.triboraizes.produtosapi.model.Acessos;
 import br.com.triboraizes.produtosapi.model.Papel;
@@ -76,6 +78,40 @@ public class UsuarioService {
                 .orElseThrow(() -> new UsuarioNaoEncontradoException(id));
         log.info("Usuário atualizado: usuario={}, papel={}, acessos={}, por={}", id, request.papel(), acessos, solicitante);
         return atualizado;
+    }
+
+    /**
+     * A conta nasce no Supabase Auth com o e-mail já confirmado; o trigger cria o perfil padrão e em seguida
+     * ele recebe o nível, os acessos, o departamento e o cargo escolhidos pelo admin.
+     */
+    public UsuarioDTO criar(CriarUsuarioRequestDTO request, UUID solicitante) {
+        List<String> acessos = Acessos.normalizar(request.papel(), request.acessos());
+        String nome = request.nome().trim();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+
+        UUID id = authClient.criarUsuario(nome, email, request.senha());
+        if (id == null) {
+            throw new ServicoDeUsuariosIndisponivelException("O serviço de usuários não devolveu a conta criada", null);
+        }
+        PerfilDAO.DadosDoUsuario dados = new PerfilDAO.DadosDoUsuario(nome, email, request.papel(), acessos,
+                opcional(request.departamento()), opcional(request.funcao()));
+        UsuarioDTO criado = perfilDAO.atualizar(id, dados)
+                .map(UsuarioDTO::from)
+                .orElseThrow(() -> new UsuarioNaoEncontradoException(id));
+        log.info("Usuário criado pelo admin: usuario={}, papel={}, acessos={}, por={}", id, request.papel(), acessos, solicitante);
+        return criado;
+    }
+
+    /** O admin não pode excluir a própria conta, o que também garante que sempre reste um administrador. */
+    public void excluir(UUID id, UUID solicitante) {
+        if (id.equals(solicitante)) {
+            throw new OperacaoNaoPermitidaException("Você não pode excluir a sua própria conta");
+        }
+        if (perfil(id).avatarUrl() != null) {
+            avatarService.remover(id);
+        }
+        authClient.excluirUsuario(id);
+        log.info("Usuário excluído: usuario={}, por={}", id, solicitante);
     }
 
     public void redefinirSenha(UUID id, String senha, UUID solicitante) {
