@@ -3,11 +3,23 @@
 [![CI](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen)
-![Testes](https://img.shields.io/badge/testes-64%20passando-success)
+![Testes](https://img.shields.io/badge/testes-84%20passando-success)
+![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-99%25-success)
 
-API REST para gerenciamento de produtos e do seu estoque, desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java. Além do CRUD pedido, oferece paginação com busca e ordenação, movimentações de estoque com histórico, indicadores para dashboard e controle de edições concorrentes.
+API REST para gerenciamento de produtos e do seu estoque, desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java. Além do CRUD pedido, oferece paginação com busca e ordenação, movimentações de estoque com histórico, indicadores para dashboard e controle de edições concorrentes com `ETag`.
 
-**Teste online:** [Swagger UI no Render](https://product-module-api.onrender.com/swagger-ui.html) | [Painel administrativo (Angular) na Vercel](https://productmoduleinterface.vercel.app) ([repositório do painel](https://github.com/Chat809/product_module_interface))
+## Links rápidos
+
+| O quê | Link |
+|---|---|
+| Swagger UI (testar os endpoints no navegador) | https://product-module-api.onrender.com/swagger-ui.html |
+| API publicada | https://product-module-api.onrender.com/api/v1/produtos |
+| Health check | https://product-module-api.onrender.com/actuator/health |
+| Painel administrativo (Angular) que consome esta API | https://productmoduleinterface.vercel.app |
+| Repositório do painel | https://github.com/Chat809/product_module_interface |
+| Execuções do CI | https://github.com/Chat809/product_module_api/actions |
+
+> No plano gratuito do Render, a primeira requisição depois de um tempo sem uso pode levar até um minuto enquanto o serviço inicia.
 
 ## Requisitos atendidos
 
@@ -17,24 +29,25 @@ API REST para gerenciamento de produtos e do seu estoque, desenvolvida como test
 | Atualizar um produto existente | `PUT /api/v1/produtos/{id}` |
 | Remover um produto existente | `DELETE /api/v1/produtos/{id}` |
 | Consultar todos os produtos e um produto por id | `GET /api/v1/produtos` (paginado) e `GET /api/v1/produtos/{id}` |
-| Boas práticas RESTful | Recursos no plural, sub-recurso para movimentações, verbos HTTP e status corretos (200, 201 + `Location`, 204, 400, 404, 409, 422) |
+| Boas práticas RESTful | Veja [REST e SOLID no projeto](#rest-e-solid-no-projeto) |
 | Spring Boot | Spring Boot 4.1.2 |
 | Banco de dados em memória | H2 |
 | Padrão DAO | `dao/ProdutoDAO` + `dao/JpaProdutoDAO` e `dao/MovimentacaoDAO` + `dao/JpaMovimentacaoDAO` |
 | Padrão Factory para criar os DAOs | `factory/DAOFactory` |
 | Padrão DTO nas requisições e respostas | `dto/` (records de entrada com validação e de saída) |
-| Testes unitários dos serviços | `service/ProdutoServiceTest` e `service/MovimentacaoServiceTest` |
+| Testes unitários dos serviços | `service/ProdutoServiceTest` e `service/MovimentacaoServiceTest`, além dos testes de domínio, web e persistência |
 
 ## Funcionalidades além do pedido
 
 - **Paginação, busca e ordenação** na listagem: `?busca=teclado&page=0&size=20&sort=preco,desc`.
 - **Identificadores UUID**, que não expõem a quantidade de registros nem permitem adivinhar ids.
 - **Auditoria:** `criadoEm` e `atualizadoEm` preenchidos automaticamente.
-- **Controle de concorrência:** cada produto tem uma `versao` (`@Version`). Se o cliente envia uma versão desatualizada no `PUT`, a API responde 409 em vez de sobrescrever a alteração de outra pessoa.
+- **Controle de concorrência com ETag:** `GET /{id}` devolve o cabeçalho `ETag` com a versão do produto. O cliente reenvia esse valor em `If-Match` no `PUT` e, se outra pessoa alterou o produto nesse meio-tempo, recebe 409 em vez de sobrescrever a alteração. O campo `versao` no corpo continua aceito.
 - **Movimentações de estoque:** entradas e saídas com motivo e histórico. Uma saída maior que o estoque é recusada com 422. A criação registra o estoque inicial, e uma edição que muda a quantidade gera um `AJUSTE` automático, mantendo o histórico consistente.
 - **Resumo do estoque** para dashboards: total de produtos e de itens, valor em estoque, esgotados e estoque baixo.
 - **Dados iniciais:** a aplicação sobe com 15 produtos de exemplo (desligável com `DADOS_INICIAIS=false`).
-- **CI** com GitHub Actions executando todos os testes a cada push.
+- **Swagger documentado:** cada endpoint descreve suas respostas de sucesso e de erro, com exemplos reais.
+- **CI** com GitHub Actions: build, testes e cobertura mínima de 80% a cada push.
 
 ## Stack
 
@@ -51,8 +64,6 @@ API REST para gerenciamento de produtos e do seu estoque, desenvolvida como test
 - O Maven **não** precisa estar instalado: o projeto usa o Maven Wrapper (`mvnw` / `mvnw.cmd`), que baixa a versão correta automaticamente.
 
 ## Como executar
-
-Clone o repositório:
 
 ```bash
 git clone https://github.com/Chat809/product_module_api.git
@@ -71,7 +82,7 @@ Linux/macOS:
 ./mvnw spring-boot:run
 ```
 
-A aplicação sobe em `http://localhost:8080` com o perfil `dev` e 15 produtos de exemplo.
+A aplicação sobe em `http://localhost:8080` (ou na porta da variável `SERVER_PORT`, se definida) com o perfil `dev` e 15 produtos de exemplo.
 
 | Recurso | URL |
 |---|---|
@@ -80,9 +91,9 @@ A aplicação sobe em `http://localhost:8080` com o perfil `dev` e 15 produtos d
 | Health check | http://localhost:8080/actuator/health |
 | Console H2 (somente `dev`) | http://localhost:8080/h2-console |
 
-Para o console H2: JDBC URL `jdbc:h2:mem:produtosdb`, usuário `sa`, senha em branco.
+Para o console H2: JDBC URL `jdbc:h2:mem:produtosdb`, usuário `sa`, senha em branco. Os dados ficam apenas em memória e voltam ao estado inicial quando a aplicação é reiniciada.
 
-Os dados ficam apenas em memória e voltam ao estado inicial quando a aplicação é reiniciada.
+Para rodar o painel junto, siga o README do [repositório do painel](https://github.com/Chat809/product_module_interface).
 
 ## Como testar
 
@@ -91,19 +102,25 @@ Os dados ficam apenas em memória e voltam ao estado inicial quando a aplicaçã
 ./mvnw clean verify         # Linux/macOS
 ```
 
-O comando executa todos os testes e gera o relatório de cobertura em `target/site/jacoco/index.html`.
+O comando executa os 84 testes, gera o relatório de cobertura em `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje está em 99%).
 
 | Classe de teste | Tipo | O que cobre |
 |---|---|---|
+| `ProdutoTest` | Unitário puro (sem Spring) | Regras da entidade: normalização dos dados, entrada, saída, estoque insuficiente e quantidade inválida |
 | `ProdutoServiceTest` | Unitário (Mockito) | CRUD, paginação, validação dos parâmetros, conflito de versão, estoque inicial, ajuste automático e resumo |
 | `MovimentacaoServiceTest` | Unitário (Mockito) | Entrada, saída, estoque insuficiente, ajuste manual recusado e histórico |
-| `ProdutoControllerTest` | Camada web (`@WebMvcTest`) | Status HTTP, `Location`, validação, 400/404/409, paginação, resumo e CORS |
+| `GlobalExceptionHandlerTest` | Unitário da camada web (MockMvc standalone) | Formato RFC 9457 de cada erro: 400, 404, 409, 422 e 500 sem vazar detalhes internos |
+| `ProdutoControllerTest` | Camada web (`@WebMvcTest`) | Status HTTP, `Location`, `ETag` e `If-Match`, validação, paginação, resumo e CORS |
 | `MovimentacaoControllerTest` | Camada web (`@WebMvcTest`) | 201, 400, 422 e histórico paginado |
 | `JpaProdutoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, auditoria, versão, paginação, busca e consultas agregadas |
 | `JpaMovimentacaoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, histórico por produto e remoção |
 | `ProdutosApiApplicationTests` | Contexto | Inicialização da aplicação com os dados iniciais |
 
+Os testes unitários isolam uma peça por vez: a entidade é testada com `new Produto(...)`, os serviços recebem DAOs falsos do Mockito e os controllers sobem apenas a camada web. Os testes de DAO usam o H2 de verdade, porque o que importa ali é a consulta JPQL.
+
 ## Endpoints
+
+A documentação completa, com exemplos de requisição e de cada erro, está no [Swagger UI](https://product-module-api.onrender.com/swagger-ui.html).
 
 ### Produtos (`/api/v1/produtos`)
 
@@ -111,9 +128,9 @@ O comando executa todos os testes e gera o relatório de cobertura em `target/si
 |---|---|---|---|---|
 | `GET` | `/` | Lista os produtos com paginação, busca e ordenação | 200 | 400 |
 | `GET` | `/resumo` | Indicadores do estoque | 200 | — |
-| `GET` | `/{id}` | Busca um produto pelo id | 200 | 400, 404 |
-| `POST` | `/` | Cria um produto | 201 + `Location` | 400 |
-| `PUT` | `/{id}` | Atualiza todos os dados de um produto | 200 | 400, 404, 409 |
+| `GET` | `/{id}` | Busca um produto pelo id | 200 + `ETag` | 400, 404 |
+| `POST` | `/` | Cria um produto | 201 + `Location` + `ETag` | 400 |
+| `PUT` | `/{id}` | Atualiza todos os dados de um produto (aceita `If-Match`) | 200 + `ETag` | 400, 404, 409 |
 | `DELETE` | `/{id}` | Remove um produto e o seu histórico | 204 | 400, 404 |
 
 Parâmetros da listagem:
@@ -155,8 +172,7 @@ Corpo de criação e atualização:
   "nome": "Teclado mecânico",
   "descricao": "Teclado mecânico ABNT2 com switches marrons",
   "preco": 349.90,
-  "quantidadeEmEstoque": 25,
-  "versao": 2
+  "quantidadeEmEstoque": 25
 }
 ```
 
@@ -166,7 +182,7 @@ Corpo de criação e atualização:
 | `descricao` | Opcional, até 500 caracteres |
 | `preco` | Obrigatório, maior que zero, até 2 casas decimais |
 | `quantidadeEmEstoque` | Obrigatório, maior ou igual a zero |
-| `versao` | Opcional, usado no `PUT`: a versão que o cliente leu. Se o produto já estiver em outra versão, a resposta é 409 |
+| `versao` | Opcional, usado no `PUT` como alternativa ao `If-Match`. Se os dois vierem, vale o cabeçalho |
 
 Resposta do resumo:
 
@@ -182,6 +198,14 @@ Resposta do resumo:
 ```
 
 O limite de estoque baixo é configurável em `app.estoque.limite-baixo`.
+
+### Edição concorrente com ETag
+
+1. `GET /api/v1/produtos/{id}` responde com `ETag: "3"`.
+2. O cliente envia `PUT /api/v1/produtos/{id}` com `If-Match: "3"`.
+3. Se ninguém alterou o produto, a resposta é 200 com `ETag: "4"`. Se alguém alterou, a resposta é 409 e nada é sobrescrito.
+
+`If-Match: *` atualiza sem checagem, e um `If-Match` malformado retorna 400. Sem cabeçalho e sem `versao` no corpo, a atualização acontece normalmente, para não quebrar clientes simples.
 
 ### Movimentações de estoque (`/api/v1/produtos/{id}/movimentacoes`)
 
@@ -207,10 +231,14 @@ curl -i -X POST http://localhost:8080/api/v1/produtos \
   -H "Content-Type: application/json" \
   -d '{"nome":"Teclado mecânico","descricao":"ABNT2","preco":349.90,"quantidadeEmEstoque":25}'
 
-# Atualizar (use o id e a versao retornados na criação)
-curl -X PUT http://localhost:8080/api/v1/produtos/{id} \
+# Ler o produto e a versão atual (veja o cabeçalho ETag)
+curl -i http://localhost:8080/api/v1/produtos/{id}
+
+# Atualizar somente se ninguém tiver alterado desde a leitura
+curl -i -X PUT http://localhost:8080/api/v1/produtos/{id} \
   -H "Content-Type: application/json" \
-  -d '{"nome":"Teclado mecânico RGB","descricao":"ABNT2","preco":399.90,"quantidadeEmEstoque":20,"versao":0}'
+  -H 'If-Match: "0"' \
+  -d '{"nome":"Teclado mecânico RGB","descricao":"ABNT2","preco":399.90,"quantidadeEmEstoque":20}'
 
 # Registrar uma saída de estoque
 curl -i -X POST http://localhost:8080/api/v1/produtos/{id}/movimentacoes \
@@ -226,7 +254,7 @@ curl -i -X DELETE http://localhost:8080/api/v1/produtos/{id}
 
 ### Formato dos erros
 
-Os erros seguem o padrão [RFC 9457 (Problem Details)](https://www.rfc-editor.org/rfc/rfc9457). Exemplo de erro de validação:
+Os erros seguem o padrão [RFC 9457 (Problem Details)](https://www.rfc-editor.org/rfc/rfc9457), com `Content-Type: application/problem+json`. Exemplo de erro de validação:
 
 ```json
 {
@@ -273,6 +301,30 @@ Fluxo de uma requisição: `Controller → Service → DAOFactory/DAO → JPA (E
 - **Factory** (`factory/DAOFactory`): é o único ponto que conhece as implementações concretas dos DAOs. Os serviços dependem apenas das interfaces, e trocar a persistência (por exemplo, JDBC puro ou outro banco) exige alterar somente a factory.
 - **DTO** (`dto/`): records de entrada (com validações) e de saída desacoplam o contrato da API das entidades. As entidades nunca são expostas, e o cliente não consegue definir campos que não deveria, como `id`, datas ou saldo.
 
+### REST e SOLID no projeto
+
+**REST**
+
+| Princípio | Como foi aplicado |
+|---|---|
+| Recursos identificados por URL | `/produtos`, `/produtos/{id}` e o sub-recurso `/produtos/{id}/movimentacoes` |
+| Verbos com a semântica do HTTP | `GET` sem efeito colateral; `POST` cria; `PUT` substitui o recurso inteiro; `DELETE` remove |
+| Status corretos | 200, 201 com `Location`, 204, 400, 404, 409 e 422 |
+| Controle de concorrência do HTTP | `ETag` nas respostas e `If-Match` no `PUT` ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#name-if-match)) |
+| Erros padronizados | `application/problem+json` (RFC 9457) |
+| Versionamento | Pela URL (`/api/v1`) |
+| Sem estado no servidor | Nenhuma sessão: cada requisição carrega tudo o que precisa |
+
+**SOLID**
+
+| Princípio | Onde aparece |
+|---|---|
+| **S**: responsabilidade única | `ProdutoController` só traduz HTTP, `ProdutoService` só aplica regras e transações, `JpaProdutoDAO` só persiste, `GlobalExceptionHandler` só formata erros |
+| **O**: aberto para extensão, fechado para modificação | Uma nova persistência é uma nova implementação de `ProdutoDAO`, criada pela `DAOFactory`, sem mexer nos serviços. Um novo erro é uma nova exceção com seu handler |
+| **L**: substituição de Liskov | Qualquer implementação de `ProdutoDAO` ou `MovimentacaoDAO` pode substituir a JPA: os testes de serviço provam isso usando DAOs falsos |
+| **I**: segregação de interfaces | Um DAO por agregado (`ProdutoDAO` e `MovimentacaoDAO`), cada um só com as operações que os serviços usam |
+| **D**: inversão de dependência | Os serviços dependem das interfaces dos DAOs e recebem a `DAOFactory` por injeção no construtor; não conhecem `EntityManager` nem JPQL |
+
 ### Boas práticas adotadas
 
 - Injeção de dependência por construtor e campos `final`.
@@ -282,16 +334,41 @@ Fluxo de uma requisição: `Controller → Service → DAOFactory/DAO → JPA (E
 - Ordenação dinâmica limitada a uma lista fechada de colunas, sem risco de injeção na consulta.
 - Erros padronizados (RFC 9457) e sem exposição de stack trace.
 - Perfis `dev` e `prod`: o console H2 fica disponível apenas em desenvolvimento.
+- Cobertura mínima verificada no build, para que a qualidade dos testes não regrida.
 
 ### Decisões de design
 
 - `PUT` substitui todos os dados do produto e retorna 404 se o id não existir (não cria o recurso, pois o id é gerado pela API).
-- A `versao` é opcional no `PUT` para não quebrar clientes simples. Quem a envia ganha proteção contra sobrescrever edições de outras pessoas. Edições realmente simultâneas também são detectadas pelo `@Version` e retornam 409.
+- A checagem de versão é opcional no `PUT` para não quebrar clientes simples. Quem envia `If-Match` (ou `versao`) ganha proteção contra sobrescrever edições de outras pessoas. Edições realmente simultâneas também são detectadas pelo `@Version` e retornam 409.
 - A listagem tem tamanho máximo de 500 itens por página, o suficiente para o painel carregar o catálogo de uma vez e filtrar no navegador, sem permitir respostas ilimitadas.
 - Movimentações são um sub-recurso do produto (`/produtos/{id}/movimentacoes`) e são imutáveis: corrigir um erro é registrar uma nova movimentação.
 - `DELETE` remove o produto junto com o seu histórico; um produto já removido retorna 404.
-- CORS liberado apenas para `/api/**` e para as origens configuradas em `app.cors.allowed-origins` (`config/CorsConfig`): o frontend local (`http://localhost:4200`) e os deploys do painel na Vercel (`https://productmoduleinterface*.vercel.app` e `https://product-module-interface*.vercel.app`). Outras origens são recusadas.
 - A API é versionada pela URL (`/api/v1`), permitindo evoluir o contrato sem quebrar clientes.
+
+## Segurança
+
+O teste pede uma API de demonstração, então ela é **pública e sem login** por decisão consciente. Mesmo assim, há proteções que valem para qualquer API.
+
+**O que já existe**
+
+- **Validação de entrada** com Bean Validation em todos os campos, com limites de tamanho e de valor (inclusive na quantidade de uma movimentação e no tamanho da página).
+- **Consultas parametrizadas** em JPQL. A ordenação dinâmica só aceita colunas de uma lista fechada, então não há como injetar SQL pela URL.
+- **CORS restrito** a `/api/**` e às origens configuradas em `app.cors.allowed-origins`: o frontend local e os deploys do painel na Vercel. Outras origens recebem 403.
+- **Nenhum detalhe interno nas respostas:** erros inesperados retornam uma mensagem genérica, e o stack trace fica só no log do servidor.
+- **Superfície mínima em produção:** o console H2 é desligado no perfil `prod`, e o Actuator expõe apenas `/health`, sem detalhes.
+- **Container sem privilégios:** a imagem Docker roda com usuário não-root.
+- **Ids não sequenciais (UUID)**, que não revelam quantos registros existem nem permitem percorrer a base adivinhando ids.
+- **Proteção contra sobrescrita acidental** com `ETag` e `If-Match`.
+
+**O que não existe, e por quê**
+
+| Ausente | Motivo neste projeto | O que seria feito em produção |
+|---|---|---|
+| Autenticação e autorização | O teste não pede e o painel é aberto para facilitar a avaliação | Spring Security com OAuth2/JWT (por exemplo, login com Google) e papéis como `ADMIN` e `LEITURA` |
+| Limite de requisições | O banco é em memória e reinicia; não há dado real em risco | Rate limit por IP ou por usuário (Bucket4j ou no gateway), respondendo 429 |
+| Cabeçalhos de segurança (HSTS, CSP etc.) | A API só devolve JSON e o Render já serve tudo por HTTPS | Configurados pelo Spring Security ou pelo proxy |
+| Gestão de segredos | Não há senha nem chave: o H2 em memória não tem credencial real | Variáveis de ambiente ou um cofre de segredos, nunca no repositório |
+| Auditoria de quem alterou | Sem login, não há "quem" | Registrar o usuário autenticado junto com `criadoEm` e `atualizadoEm` |
 
 ## Deploy no Render
 
@@ -316,13 +393,16 @@ docker build -t produtos-api .
 docker run -p 8080:8080 produtos-api
 ```
 
-## API publicada
+## Referências
 
-| Recurso | URL |
-|---|---|
-| API | https://product-module-api.onrender.com/api/v1/produtos |
-| Swagger UI | https://product-module-api.onrender.com/swagger-ui.html |
-| Health check | https://product-module-api.onrender.com/actuator/health |
-| Painel administrativo (frontend) | https://productmoduleinterface.vercel.app |
-
-No plano gratuito, a primeira requisição após um período sem uso pode levar cerca de um minuto enquanto o serviço inicia.
+- [Spring Boot](https://docs.spring.io/spring-boot/index.html)
+- [Spring Web MVC](https://docs.spring.io/spring-framework/reference/web/webmvc.html) e [tratamento de erros com ProblemDetail](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html)
+- [Jakarta Persistence (JPA)](https://jakarta.ee/specifications/persistence/) e [Hibernate ORM](https://hibernate.org/orm/documentation/)
+- [Jakarta Bean Validation](https://beanvalidation.org/)
+- [H2 Database](https://www.h2database.com/)
+- [springdoc-openapi](https://springdoc.org/) e [OpenAPI Specification](https://spec.openapis.org/oas/latest.html)
+- [JUnit 5](https://junit.org/junit5/docs/current/user-guide/), [Mockito](https://site.mockito.org/), [AssertJ](https://assertj.github.io/doc/) e [JaCoCo](https://www.jacoco.org/jacoco/trunk/doc/)
+- [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
+- [RFC 9110: HTTP Semantics (ETag e If-Match)](https://www.rfc-editor.org/rfc/rfc9110)
+- [Render: deploy com Docker](https://render.com/docs/docker)
+- [GitHub Actions](https://docs.github.com/actions)
