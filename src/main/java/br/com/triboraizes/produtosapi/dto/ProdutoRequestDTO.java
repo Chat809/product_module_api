@@ -35,11 +35,16 @@ public record ProdutoRequestDTO(
         Integer quantidadeEmEstoque,
 
         @Schema(description = "Opcional no PUT: versão lida pelo cliente. Se o produto tiver sido alterado depois disso, "
-                + "a API responde 409 em vez de sobrescrever a alteração", example = "0")
+                + "a API responde 409 em vez de sobrescrever a alteração. O cabeçalho If-Match, se enviado, "
+                + "tem prioridade. Ignorado no POST", example = "0", nullable = true)
         Long versao
 ) {
 
     public Produto toEntity() {
         return new Produto(nome, descricao, preco, quantidadeEmEstoque);
+    }
+
+    public ProdutoRequestDTO comVersao(Long novaVersao) {
+        return new ProdutoRequestDTO(nome, descricao, preco, quantidadeEmEstoque, novaVersao);
     }
 }

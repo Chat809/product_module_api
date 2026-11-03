@@ -1,13 +1,11 @@
 package br.com.triboraizes.produtosapi.controller;
 
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
-import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
-import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import org.junit.jupiter.api.DisplayName;
@@ -24,8 +22,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -120,6 +120,7 @@ class ProdutoControllerTest {
 
         mockMvc.perform(get(URL + "/" + ID))
                 .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(jsonPath("$.preco").value(349.90))
                 .andExpect(jsonPath("$.quantidadeEmEstoque").value(25));
     }
@@ -152,6 +153,7 @@ class ProdutoControllerTest {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "http://localhost/api/v1/produtos/" + ID))
+                .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(jsonPath("$.id").value(ID.toString()));
     }
 
@@ -186,7 +188,52 @@ class ProdutoControllerTest {
 
         mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(jsonPath("$.nome").value("Teclado"));
+
+        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null));
+    }
+
+    @Test
+    @DisplayName("PUT /produtos/{id} deve usar a versão do If-Match, com prioridade sobre o corpo")
+    void deveUsarVersaoDoIfMatch() throws Exception {
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        String jsonComVersao = """
+                {"nome": "Teclado", "preco": 349.90, "quantidadeEmEstoque": 25, "versao": 1}
+                """;
+
+        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "\"7\"")
+                        .contentType(MediaType.APPLICATION_JSON).content(jsonComVersao))
+                .andExpect(status().isOk());
+        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "W/\"8\"")
+                        .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isOk());
+
+        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(7).equals(req.versao())));
+        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(8).equals(req.versao())));
+    }
+
+    @Test
+    @DisplayName("PUT /produtos/{id} com If-Match * deve atualizar sem checar a versão")
+    void deveAceitarIfMatchCuringa() throws Exception {
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+
+        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "*")
+                        .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isOk());
+
+        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null));
+    }
+
+    @Test
+    @DisplayName("PUT /produtos/{id} deve retornar 400 quando o If-Match for malformado")
+    void deveRetornar400EmIfMatchMalformado() throws Exception {
+        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "versao-3")
+                        .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Parâmetro inválido"));
+
+        verifyNoInteractions(produtoService);
     }
 
     @Test
@@ -252,6 +299,16 @@ class ProdutoControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(header().string("Access-Control-Allow-Origin", origem));
         }
+    }
+
+    @Test
+    @DisplayName("Deve expor os cabeçalhos ETag e Location para o frontend")
+    void deveExporEtagNoCors() throws Exception {
+        when(produtoService.buscarPorId(ID)).thenReturn(RESPONSE);
+
+        mockMvc.perform(get(URL + "/" + ID).header("Origin", "http://localhost:4200"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("ETag")));
     }
 
     @Test
