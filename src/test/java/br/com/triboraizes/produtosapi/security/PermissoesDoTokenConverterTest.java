@@ -29,7 +29,8 @@ class PermissoesDoTokenConverterTest {
     @DisplayName("ADMIN recebe ROLE_ADMIN e todos os módulos, mesmo com acessos limitados no token")
     void deveLiberarTudoParaAdmin() {
         assertThat(autoridades(Map.of("papel", "ADMIN", "acessos", List.of("dashboard"))))
-                .containsExactly("ROLE_ADMIN", "MODULO_DASHBOARD", "MODULO_PRODUTOS", "MODULO_USUARIOS");
+                .containsExactly("ROLE_ADMIN", "MODULO_DASHBOARD", "MODULO_PRODUTOS", "MODULO_DEMANDAS",
+                        "MODULO_FINANCEIRO", "MODULO_USUARIOS");
     }
 
     @Test
@@ -45,15 +46,16 @@ class PermissoesDoTokenConverterTest {
     @DisplayName("'*' para USUARIO libera todos os módulos, exceto o de usuários")
     void deveTratarAsteriscoDoUsuario() {
         assertThat(autoridades(Map.of("papel", "USUARIO", "acessos", List.of("*", "usuarios"))))
-                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS");
+                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS", "MODULO_DEMANDAS",
+                        "MODULO_FINANCEIRO");
     }
 
     @Test
     @DisplayName("Token sem acessos (anterior à coluna) ou sem app_metadata recebe o padrão")
     void deveCairParaPadrao() {
         assertThat(autoridades(Map.of("papel", "dono")))
-                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS");
+                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS", "MODULO_DEMANDAS");
         assertThat(conversor.convert(token(Map.of("email", "a@b.com")))).extracting(GrantedAuthority::getAuthority)
-                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS");
+                .containsExactly("ROLE_USUARIO", "MODULO_DASHBOARD", "MODULO_PRODUTOS", "MODULO_DEMANDAS");
     }
 }

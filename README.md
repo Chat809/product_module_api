@@ -3,470 +3,261 @@
 [![CI](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Chat809/product_module_api/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen)
-![Testes](https://img.shields.io/badge/testes-156%20passando-success)
-![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-99%25-success)
+![Testes](https://img.shields.io/badge/testes-233%20passando-success)
+![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-98%25-success)
 
-API REST para gerenciamento de produtos e do seu estoque, desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java. Além do CRUD pedido, oferece paginação com busca e ordenação, movimentações de estoque com histórico, indicadores para dashboard, controle de edições concorrentes com `ETag`, login com e-mail e senha ou com Google, e papéis e acessos por módulo (usuários guardados no Supabase).
+API REST de produtos e estoque feita para o teste técnico de Desenvolvedor Backend Java. Cumpre o que o PDF pede (CRUD de produtos com Spring Boot, H2, DAO, Factory, DTO e testes dos serviços) e, a partir de sugestões feitas durante o desenvolvimento, ganhou autenticação, acessos por módulo, gestão de usuários, perfil com foto, demandas em Kanban e um módulo financeiro.
 
 ## Sumário
 
 - [Links rápidos](#links-rápidos)
-- [Requisitos atendidos](#requisitos-atendidos)
-- [Funcionalidades](#funcionalidades)
-- [Stack](#stack) · [Pré-requisitos](#pré-requisitos) · [Como executar](#como-executar) · [Como testar](#como-testar)
-- [Endpoints](#endpoints)
-  - [Autenticação](#autenticação) e [Login com Google](#login-com-google)
-  - [Usuários](#usuários-apiv1usuarios) e [Acessos por módulo](#acessos-por-módulo)
-  - [Produtos](#produtos-apiv1produtos), [ETag](#edição-concorrente-com-etag) e [Movimentações](#movimentações-de-estoque-apiv1produtosidmovimentacoes)
-  - [Exemplos com curl](#exemplos-com-curl) e [Formato dos erros](#formato-dos-erros)
-- [Arquitetura](#arquitetura) · [Segurança](#segurança) · [Deploy no Render](#deploy-no-render) · [Referências](#referências)
+- [Requisitos do teste técnico (PDF original)](#requisitos-do-teste-técnico-pdf-original)
+- [Funcionalidades extras](#funcionalidades-extras): [paginação](#1-paginação-busca-e-ordenação) · [ETag](#2-edição-concorrente-com-etag) · [movimentações](#3-movimentações-de-estoque) · [resumo](#4-resumo-para-dashboard) · [autenticação](#5-autenticação-e-mail-e-senha-e-login-com-google) · [acessos](#6-papéis-e-acessos-por-módulo) · [usuários](#7-gestão-de-usuários-pelo-admin) · [perfil](#8-meu-perfil-e-avatar) · [demandas](#9-demandas-e-tarefas) · [financeiro](#10-financeiro-contas-a-pagar-e-a-receber)
+- [Referência técnica](#referência-técnica): [stack](#stack) · [como executar](#como-executar) · [testes](#testes) · [erros](#formato-dos-erros) · [arquitetura](#arquitetura) · [REST e SOLID](#rest-e-solid) · [segurança](#segurança) · [deploy](#deploy-no-render) · [referências](#referências)
 
 ## Links rápidos
 
 | O quê | Link |
 |---|---|
-| Swagger UI (testar os endpoints no navegador) | https://product-module-api.onrender.com/swagger-ui.html |
+| Swagger UI (todos os endpoints, com exemplos de sucesso e de erro) | https://product-module-api.onrender.com/swagger-ui.html |
 | API publicada | https://product-module-api.onrender.com/api/v1/produtos |
 | Health check | https://product-module-api.onrender.com/actuator/health |
-| Painel administrativo (Angular) que consome esta API | https://productmoduleinterface.vercel.app |
-| Repositório do painel | https://github.com/Chat809/product_module_interface |
+| Painel (Angular) que consome esta API | https://productmoduleinterface.vercel.app ([repositório](https://github.com/Chat809/product_module_interface)) |
 | Execuções do CI | https://github.com/Chat809/product_module_api/actions |
 
-> No plano gratuito do Render, a primeira requisição depois de um tempo sem uso pode levar até um minuto enquanto o serviço inicia.
+> No plano gratuito do Render, a primeira requisição depois de um tempo sem uso pode levar até um minuto.
 
-## Requisitos atendidos
+## Requisitos do teste técnico (PDF original)
 
-| Requisito do teste | Onde está |
+O PDF com o enunciado não é versionado; a tabela segue o texto dele, sem alterá-lo.
+
+| Requisito do PDF | Como foi cumprido | Onde está |
+|---|---|---|
+| API REST para gerenciar produtos (nome, descrição, preço, quantidade em estoque) | Recurso `/api/v1/produtos` com DTOs validados | `controller/ProdutoController`, `dto/ProdutoRequestDTO` |
+| Criar produto | `POST /api/v1/produtos` → 201 com `Location` | `ProdutoController.criar` |
+| Atualizar produto existente | `PUT /api/v1/produtos/{id}` → 200, ou 404 se não existir | `ProdutoController.atualizar` |
+| Remover produto existente | `DELETE /api/v1/produtos/{id}` → 204 | `ProdutoController.remover` |
+| Consultar todos e por id | `GET /api/v1/produtos` e `GET /api/v1/produtos/{id}` | `ProdutoController.listar` e `buscarPorId` |
+| Boas práticas RESTful | Verbos e status do HTTP, sub-recursos, versionamento pela URL, erros RFC 9457 | [REST e SOLID](#rest-e-solid) |
+| Spring Boot | Spring Boot 4.1.2 com Java 21 | `pom.xml` |
+| Banco em memória H2 | Produtos e movimentações no H2 (`jdbc:h2:mem:produtosdb`) | `application.properties` |
+| Padrão DAO | Interfaces sem tecnologia exposta e implementações com `EntityManager` | `dao/ProdutoDAO`, `dao/JpaProdutoDAO`, `dao/MovimentacaoDAO`, `dao/JpaMovimentacaoDAO` |
+| Padrão Factory para os DAOs | Único ponto que conhece as implementações concretas | `factory/DAOFactory` |
+| Padrão DTO | Records de entrada (com validação) e de saída; entidades nunca expostas | `dto/` |
+| Testes unitários dos serviços | Serviços testados com DAOs falsos (Mockito) | `ProdutoServiceTest`, `MovimentacaoServiceTest` |
+| Instruções para executar e testar | Esta seção e [Como executar](#como-executar) | README |
+
+**Rodar e testar só o que foi pedido:**
+
+```powershell
+.\mvnw.cmd spring-boot:run     # Windows  (./mvnw spring-boot:run no Linux/macOS)
+.\mvnw.cmd test -Dtest="ProdutoServiceTest,MovimentacaoServiceTest,ProdutoTest"
+```
+
+A API sobe em `http://localhost:8080` com 15 produtos de exemplo no H2. Os endpoints de produtos exigem login (extra 5); para testar no navegador, abra o [Swagger UI local](http://localhost:8080/swagger-ui.html), faça `POST /api/v1/auth/registro` e use o `accessToken` em **Authorize**.
+
+## Funcionalidades extras
+
+Cada extra tem o mesmo formato: o que faz, como foi construída e por que assim. Payloads completos e todos os erros estão no Swagger.
+
+Produtos ficam no H2, como o PDF pede. Tudo o que precisa sobreviver a um reinício (usuários, perfis, demandas, contas e fotos) fica no **Supabase** (Auth, Postgres e Storage), escolha feita por você quando os módulos novos foram pedidos. A API acessa o Postgres pela API REST do Supabase (PostgREST) com a chave secreta, por trás de DAOs, como os produtos.
+
+### 1. Paginação, busca e ordenação
+
+**O que faz:** `GET /api/v1/produtos?busca=teclado&page=0&size=20&sort=preco,desc` devolve uma página com `conteudo`, `pagina`, `tamanho`, `totalElementos` e `totalPaginas`.
+
+**Como foi construída:** `JpaProdutoDAO` monta a JPQL com `lower(...) like` para a busca e um `order by` escolhido de uma lista fechada de colunas (`nome`, `preco`, `quantidadeEmEstoque`, `criadoEm`, `atualizadoEm`). `size` vai de 1 a 500; valores fora disso respondem 400.
+
+**Por que assim:** a lista fechada impede injeção pela URL. O limite de 500 deixa o painel carregar o catálogo inteiro uma vez e buscar no navegador, sem permitir respostas ilimitadas.
+
+### 2. Edição concorrente com ETag
+
+**O que faz:** impede que duas pessoas editando o mesmo produto sobrescrevam uma à outra.
+
+**Como foi construída:** a entidade tem `@Version`. `GET /{id}` responde `ETag: "3"`; o `PUT` com `If-Match: "3"` só grava se a versão ainda for 3, senão responde 409. `If-Match: *` ou nenhum cabeçalho gravam sem checagem; um valor malformado responde 400. A versão também pode ir no corpo (`versao`).
+
+**Por que assim:** é o mecanismo que o próprio HTTP define ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#name-if-match)). Ser opcional não quebra clientes simples.
+
+### 3. Movimentações de estoque
+
+**O que faz:** registra entradas e saídas com motivo e mantém o histórico de cada produto.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/produtos/{id}/movimentacoes` | `{ "tipo": "SAIDA", "quantidade": 5, "motivo": "Venda" }` → 201; saída maior que o estoque → 422 |
+| `GET` | `/api/v1/produtos/{id}/movimentacoes` | Histórico do mais recente para o mais antigo, paginado |
+
+**Como foi construída:** a regra de estoque não negativo fica na entidade (`registrarEntrada`, `registrarSaida`). Criar um produto registra o estoque inicial e editar a quantidade gera um `AJUSTE` automático.
+
+**Por que assim:** movimentações são imutáveis; corrigir é registrar outra, o que mantém o histórico confiável.
+
+### 4. Resumo para dashboard
+
+**O que faz:** `GET /api/v1/produtos/resumo` devolve total de produtos e de itens, valor em estoque, esgotados e estoque baixo.
+
+**Como foi construída:** consultas agregadas no `JpaProdutoDAO`; o limite de estoque baixo vem de `app.estoque.limite-baixo`.
+
+**Por que assim:** os números saem prontos do banco, sem o cliente precisar baixar o catálogo.
+
+### 5. Autenticação: e-mail e senha, e login com Google
+
+**O que faz:** registro, login, login com Google e renovação de sessão. Todas as outras rotas exigem `Authorization: Bearer <accessToken>`.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/auth/registro` | Cria a conta (`nome`, `email`, `senha`) como `USUARIO` e abre a sessão → 201 |
+| `POST` | `/api/v1/auth/login` | E-mail e senha → sessão |
+| `POST` | `/api/v1/auth/google` | Troca `codigo` e `verificador` (PKCE) pela sessão |
+| `POST` | `/api/v1/auth/refresh` | Troca o `refreshToken` por uma sessão nova |
+
+**Como foi construída:** os usuários ficam no Supabase Auth. A API é um *resource server*: valida o JWT ES256 (assinatura pelo JWKS, emissor, audiência e expiração) sem consultar o Supabase a cada requisição. O Google segue o fluxo PKCE: o painel manda o desafio ao Supabase e a API troca código e verificador em `/auth/v1/token?grant_type=pkce`. Quem já tem conta com o mesmo e-mail entra nela, com o mesmo papel e acessos.
+
+**Por que assim:** o painel não conhece nenhuma chave do Supabase, só a API conhece. PKCE foi pedido por você para que o token nunca apareça na URL. Configuração do Google: Client ID e Client Secret só no Supabase (*Authentication > Providers > Google*) e `<painel>/auth/callback` nas Redirect URLs.
+
+### 6. Papéis e acessos por módulo
+
+**O que faz:** cada usuário tem um papel (`ADMIN` ou `USUARIO`) e uma lista de módulos liberados: `dashboard`, `produtos`, `demandas`, `financeiro`, `usuarios` ou `["*"]` (acesso total). O que não foi liberado responde 403.
+
+| Rota | Exige |
 |---|---|
-| Criar produto com nome, descrição, preço e quantidade em estoque | `POST /api/v1/produtos` |
-| Atualizar um produto existente | `PUT /api/v1/produtos/{id}` |
-| Remover um produto existente | `DELETE /api/v1/produtos/{id}` |
-| Consultar todos os produtos e um produto por id | `GET /api/v1/produtos` (paginado) e `GET /api/v1/produtos/{id}` |
-| Boas práticas RESTful | Veja [REST e SOLID no projeto](#rest-e-solid-no-projeto) |
-| Spring Boot | Spring Boot 4.1.2 |
-| Banco de dados em memória | H2 |
-| Padrão DAO | `dao/ProdutoDAO` + `dao/JpaProdutoDAO` e `dao/MovimentacaoDAO` + `dao/JpaMovimentacaoDAO` |
-| Padrão Factory para criar os DAOs | `factory/DAOFactory` |
-| Padrão DTO nas requisições e respostas | `dto/` (records de entrada com validação e de saída) |
-| Testes unitários dos serviços | `service/ProdutoServiceTest` e `service/MovimentacaoServiceTest`, além dos testes de domínio, web e persistência |
+| `GET /produtos/resumo` | `dashboard` |
+| `GET /produtos/**` | `dashboard` ou `produtos` |
+| Escrita em `/produtos/**` | `produtos` |
+| `/demandas/**` e `GET /usuarios/opcoes` | `demandas` |
+| `/financeiro/**` | `financeiro` |
+| `/usuarios/me/**` | qualquer usuário logado |
+| Demais `/usuarios/**` | papel `ADMIN` |
 
-## Funcionalidades
+**Como foi construída:** papel e acessos ficam em `public.perfis`. Um trigger copia os dois para o `app_metadata` do usuário, que vai no JWT e que ele não consegue alterar. O `PermissoesDoTokenConverter` transforma isso em `ROLE_*` e `MODULO_*`, exigidos rota a rota no `SecurityConfig`. Uma `check constraint` recusa valores desconhecidos. Conta nova recebe `["dashboard", "produtos", "demandas"]`.
 
-| Área | O que a API oferece |
-|---|---|
-| **Produtos** | CRUD completo, paginação, busca por nome ou descrição e ordenação por coluna (`?busca=teclado&page=0&size=20&sort=preco,desc`). Ids UUID e auditoria automática (`criadoEm`, `atualizadoEm`). 15 produtos de exemplo na subida (`DADOS_INICIAIS=false` desliga) |
-| **Edição concorrente** | `GET /{id}` devolve o `ETag` com a versão; o `PUT` com `If-Match` recebe 409 se outra pessoa alterou o produto, em vez de sobrescrever. Veja [ETag](#edição-concorrente-com-etag) |
-| **Estoque** | Entradas e saídas com motivo e histórico. Saída maior que o estoque responde 422. A criação registra o estoque inicial e a edição da quantidade gera um `AJUSTE` automático |
-| **Dashboard** | Resumo com total de produtos e de itens, valor em estoque, esgotados e estoque baixo |
-| **Login** | Registro e login com e-mail e senha, ou [login com Google](#login-com-google). Contas que já existem entram com o Google pelo mesmo e-mail, mantendo cargo e acessos. Sessão renovada pelo `refreshToken` |
-| **Papéis e acessos** | Papel `ADMIN` ou `USUARIO` e uma lista de módulos liberados (`dashboard`, `produtos` ou `["*"]`). A API recusa com 403 o que não foi liberado. Veja [Acessos por módulo](#acessos-por-módulo) |
-| **Gestão de usuários** | Administradores listam usuários e editam nome, e-mail, cargo, acessos e senha de qualquer um. Senhas nunca podem ser lidas, apenas redefinidas |
-| **Qualidade** | Swagger com exemplos reais de sucesso e de erro, erros no padrão RFC 9457, 156 testes e CI com cobertura mínima de 80% a cada push |
+**Por que assim:** `*` como acesso total foi pedido por você. Financeiro fica fora do padrão, também por escolha sua, e só entra quando o admin libera. `usuarios` é exclusivo de admin, e admin tem sempre `*`. Acessos novos valem no próximo login ou renovação (até 1 hora).
 
-## Stack
+### 7. Gestão de usuários pelo admin
 
-- Java 21 (LTS)
-- Spring Boot 4.1.2 (Spring Web MVC, Spring Data JPA, Bean Validation, Actuator)
-- Spring Security como OAuth2 Resource Server (validação de JWT)
-- H2 Database (em memória) para produtos e movimentações
-- Supabase (Auth e Postgres) para usuários, papéis e acessos
+**O que faz:** o administrador lista as contas e edita nome, e-mail, papel, acessos e senha de qualquer uma.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/usuarios?page=0&size=20` | Lista com papel, acessos e foto |
+| `PUT` | `/api/v1/usuarios/{id}` | `{ nome, email, papel, acessos }`; e-mail de outra conta → 409; admin rebaixando a si mesmo → 422 |
+| `PUT` | `/api/v1/usuarios/{id}/senha` | Define nova senha (6 a 72 caracteres) → 204 |
+
+**Como foi construída:** `UsuarioService` grava papel e acessos em `perfis` (`SupabasePerfilDAO`) e só chama o Supabase Auth (`SupabaseAuthClient`) quando nome ou e-mail mudam.
+
+**Por que assim:** senhas não podem ser lidas por ninguém (o Supabase guarda só o hash), por isso existe "definir nova senha". O e-mail é editável só pelo admin, como você pediu, porque é o login da pessoa. O admin não pode tirar o próprio papel, para sempre restar um.
+
+### 8. Meu perfil e avatar
+
+**O que faz:** cada pessoa vê e edita os próprios dados (nome, telefone, função, bio) e envia uma foto. E-mail, papel e acessos aparecem só para leitura.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/usuarios/me` | Perfil completo, com papel e acessos atuais do banco |
+| `PUT` | `/api/v1/usuarios/me` | `{ nome, telefone, funcao, bio }` |
+| `PUT` | `/api/v1/usuarios/me/avatar` | Multipart, campo `arquivo`: PNG, JPEG ou WebP até 2 MB; maior → 413 |
+| `DELETE` | `/api/v1/usuarios/me/avatar` | Remove a foto |
+| `GET` | `/api/v1/usuarios/opcoes` | Só id, nome e foto de todos, para escolher responsáveis (módulo `demandas`) |
+
+**Como foi construída:** as colunas novas ficam em `perfis`; o nome também é atualizado no Supabase Auth. A foto vai para o bucket público `avatars` do Supabase Storage pelo `SupabaseStorageClient`, em `{id}/{uuid}.{ext}`, e a foto anterior é apagada. O tipo é detectado pelos primeiros bytes do arquivo (`FormatoDeImagem`), não pelo cabeçalho enviado.
+
+**Por que assim:** o nome do arquivo é um UUID, que não expõe nome nem e-mail. Validar pelo conteúdo impede renomear um arquivo qualquer para `.png`. O bucket só permite leitura pública; quem grava é a API, com a chave secreta.
+
+### 9. Demandas e tarefas
+
+**O que faz:** quadro Kanban com as colunas `A_FAZER`, `EM_ANDAMENTO`, `EM_REVISAO` e `CONCLUIDO`. Cada demanda tem título, descrição, tipo, urgência, prazo, responsáveis e checklist. As demandas abertas em que a pessoa é responsável são as "Minhas tarefas" do perfil.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/demandas?responsavel=me&abertas=true&status=&busca=` | Lista na ordem do quadro (até 500); `atrasada` vem calculada |
+| `GET` | `/api/v1/demandas/{id}` | Uma demanda |
+| `POST` | `/api/v1/demandas` | Cria no fim da coluna (padrão `A_FAZER`) → 201 |
+| `PUT` | `/api/v1/demandas/{id}` | Edita |
+| `PATCH` | `/api/v1/demandas/{id}/status` | `{ "status": "EM_REVISAO", "posicao": 0 }`: move o cartão |
+| `DELETE` | `/api/v1/demandas/{id}` | Só quem criou ou um admin; outro usuário → 422 |
+
+**Como foi construída:** tabela `demandas` com `responsaveis uuid[]` (índice GIN), `checklist jsonb` e `ordem`. Um trigger põe a demanda nova no fim da coluna, e a função `mover_demanda` renumera a coluna de destino numa única transação. Responsáveis são conferidos contra os perfis existentes. "Hoje" usa o fuso de Brasília.
+
+**Por que assim:** usar as próprias demandas como tarefas, em vez de um cadastro separado, foi decisão sua. Reordenar no banco evita posições repetidas quando duas pessoas arrastam ao mesmo tempo.
+
+### 10. Financeiro: contas a pagar e a receber
+
+**O que faz:** lançamento de contas a pagar (com favorecido) e a receber (com pagador), com percentual de imposto, forma de pagamento e chave Pix, baixa com data, cancelamento e um resumo.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/financeiro/resumo` | A pagar, a receber, vencidos, pago e recebido no mês, saldo previsto (pelo líquido) |
+| `GET` | `/api/v1/financeiro/{tipo}?status=&vencidas=&busca=&vencimentoDe=&vencimentoAte=&page=&size=` | Lista paginada em ordem de vencimento |
+| `POST`, `PUT` | `/api/v1/financeiro/{tipo}` e `/{tipo}/{id}` | Lança ou edita; Pix sem chave → 400 |
+| `PATCH` | `/api/v1/financeiro/{tipo}/{id}/baixa` | `{ "data": "2026-11-03" }` (padrão hoje, nunca futura); já quitada → 422 |
+| `PATCH` | `/api/v1/financeiro/{tipo}/{id}/cancelamento` | Cancela uma pendente, mantendo o histórico |
+| `DELETE` | `/api/v1/financeiro/{tipo}/{id}` | Exclui lançamento feito por engano |
+
+`{tipo}` é `contas-pagar` ou `contas-receber`.
+
+**Como foi construída:** tabelas `contas_pagar` e `contas_receber` com o mesmo formato. `valor_imposto` e `valor_liquido` são colunas geradas pelo banco (`round(valor × percentual / 100, 2)`). Constraints garantem chave Pix quando a forma é PIX e data de baixa se, e somente se, a conta estiver quitada. O resumo é a função `resumo_financeiro`.
+
+**Por que assim:** imposto como percentual, com o líquido calculado no banco, foi o que você pediu; assim nenhum cliente consegue gravar um líquido inconsistente. Os totais usam o líquido, que é o que de fato entra ou sai do caixa. Exige o módulo `financeiro`, que contas novas não recebem.
+
+## Referência técnica
+
+### Stack
+
+- Java 21 e Spring Boot 4.1.2 (Web MVC, Data JPA, Bean Validation, Actuator, Security como OAuth2 Resource Server)
+- H2 em memória para produtos e movimentações
+- Supabase: Auth (usuários), Postgres via PostgREST (perfis, demandas, contas) e Storage (fotos)
 - springdoc-openapi (Swagger UI)
-- JUnit 5, Mockito, AssertJ e JaCoCo
-- Maven (via Maven Wrapper)
+- JUnit 5, Mockito, AssertJ e JaCoCo; Maven Wrapper
 
-## Pré-requisitos
+### Como executar
 
-- **JDK 21** instalado, com `JAVA_HOME` configurado ou `java` disponível no `PATH`.
-- O Maven **não** precisa estar instalado: o projeto usa o Maven Wrapper (`mvnw` / `mvnw.cmd`), que baixa a versão correta automaticamente.
-
-## Como executar
+Pré-requisito: JDK 21 (o Maven não precisa estar instalado).
 
 ```bash
 git clone https://github.com/Chat809/product_module_api.git
 cd product_module_api
+./mvnw spring-boot:run          # Windows: .\mvnw.cmd spring-boot:run
 ```
 
-Windows (PowerShell):
+Para o login e os módulos guardados no Supabase, defina antes a chave secreta (em *Project Settings > API Keys*), que nunca vai para o repositório:
 
 ```powershell
-.\mvnw.cmd spring-boot:run
+$env:SUPABASE_SECRET_KEY = "<SUPABASE_SECRET_KEY>"    # Linux/macOS: export SUPABASE_SECRET_KEY="<SUPABASE_SECRET_KEY>"
 ```
 
-Linux/macOS:
-
-```bash
-./mvnw spring-boot:run
-```
-
-A aplicação sobe em `http://localhost:8080` (ou na porta da variável `SERVER_PORT`, se definida) com o perfil `dev` e 15 produtos de exemplo.
-
-Os endpoints de produtos exigem login. Para entrar localmente, defina antes a chave secreta do Supabase (em *Project Settings > API Keys*), que nunca deve ir para o repositório:
-
-```powershell
-$env:SUPABASE_SECRET_KEY = "sb_secret_..."   # Windows
-export SUPABASE_SECRET_KEY="sb_secret_..."   # Linux/macOS
-```
-
-Sem a chave, a aplicação sobe normalmente, mas login e registro respondem 503 explicando o que falta.
+Sem a chave, a aplicação sobe, mas login e os módulos do Supabase respondem 503 explicando o que falta.
 
 | Recurso | URL |
 |---|---|
 | API | http://localhost:8080/api/v1/produtos |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
-| Health check | http://localhost:8080/actuator/health |
-| Console H2 (somente `dev`) | http://localhost:8080/h2-console |
+| Console H2 (só no perfil `dev`) | http://localhost:8080/h2-console (JDBC `jdbc:h2:mem:produtosdb`, usuário `sa`, senha em branco) |
 
-Para o console H2: JDBC URL `jdbc:h2:mem:produtosdb`, usuário `sa`, senha em branco. Os dados ficam apenas em memória e voltam ao estado inicial quando a aplicação é reiniciada.
-
-Para rodar o painel junto, siga o README do [repositório do painel](https://github.com/Chat809/product_module_interface).
-
-## Como testar
-
-```powershell
-.\mvnw.cmd clean verify     # Windows
-./mvnw clean verify         # Linux/macOS
-```
-
-O comando executa os 156 testes, gera o relatório de cobertura em `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje está em 99%). Nenhum teste acessa o Supabase de verdade: as chamadas HTTP são simuladas com `MockRestServiceServer`.
-
-| Classe de teste | Tipo | O que cobre |
-|---|---|---|
-| `ProdutoTest` | Unitário puro (sem Spring) | Regras da entidade: normalização dos dados, entrada, saída, estoque insuficiente e quantidade inválida |
-| `ProdutoServiceTest` | Unitário (Mockito) | CRUD, paginação, validação dos parâmetros, conflito de versão, estoque inicial, ajuste automático e resumo |
-| `MovimentacaoServiceTest` | Unitário (Mockito) | Entrada, saída, estoque insuficiente, ajuste manual recusado e histórico |
-| `GlobalExceptionHandlerTest` | Unitário da camada web (MockMvc standalone) | Formato RFC 9457 de cada erro: 400, 404, 409, 422 e 500 sem vazar detalhes internos |
-| `ProdutoControllerTest` | Camada web (`@WebMvcTest`) | Status HTTP, `Location`, `ETag` e `If-Match`, validação, paginação, resumo, CORS, 401 sem token e 403 por módulo (dashboard só lê, sem módulo nada passa) |
-| `MovimentacaoControllerTest` | Camada web (`@WebMvcTest`) | 201, 400, 422 e histórico paginado |
-| `AuthControllerTest` | Camada web (`@WebMvcTest`) | Registro, login, login com Google e refresh sem token; 400, 401, 409 e 503 |
-| `UsuarioControllerTest` | Camada web (`@WebMvcTest`) com JWT simulado | `/me` para qualquer papel, 403 para não-admin, listagem, edição (400, 409, 422) e nova senha (204) |
-| `AuthServiceTest` e `UsuarioServiceTest` | Unitário (Mockito) | Normalização do e-mail, sessão com papel e acessos, nome vindo do Google sem sobrepor o do cadastro, edição que só chama o Supabase Auth quando nome ou e-mail mudam, e bloqueio do admin rebaixar a si mesmo |
-| `SupabaseAuthClientTest` | Unitário com `MockRestServiceServer` | Corpo e cabeçalhos enviados ao Supabase Auth (criação, edição, nova senha, troca do código do Google) e tradução de cada erro (e-mail repetido, senha fraca, id inexistente, credenciais, código do Google expirado, indisponibilidade) |
-| `SupabasePerfilDAOTest` | Unitário com `MockRestServiceServer` | Consultas ao PostgREST, contagem pelo `Content-Range` e gravação de papel e acessos como array JSON |
-| `PermissoesDoTokenConverterTest` | Unitário puro | Conversão de papel e acessos do `app_metadata` em `ROLE_*` e `MODULO_*`, inclusive tokens antigos sem acessos |
-| `AcessosTest` | Unitário puro | Regras da coluna `acessos`: `*`, ordem canônica, módulo desconhecido e `usuarios` exclusivo de admin |
-| `JpaProdutoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, auditoria, versão, paginação, busca e consultas agregadas |
-| `JpaMovimentacaoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, histórico por produto e remoção |
-| `ProdutosApiApplicationTests` | Contexto | Inicialização da aplicação com os dados iniciais |
-
-Os testes unitários isolam uma peça por vez: a entidade é testada com `new Produto(...)`, os serviços recebem DAOs falsos do Mockito e os controllers sobem apenas a camada web. Os testes de DAO usam o H2 de verdade, porque o que importa ali é a consulta JPQL.
-
-## Endpoints
-
-A documentação completa, com exemplos de requisição e de cada erro, está no [Swagger UI](https://product-module-api.onrender.com/swagger-ui.html).
-
-Com exceção de `/api/v1/auth/**`, do Swagger e do health check, todas as rotas exigem o cabeçalho `Authorization: Bearer <accessToken>`. Sem ele, a resposta é 401. Com ele, mas sem o módulo ou o papel exigido pela rota, a resposta é 403 (veja [Acessos por módulo](#acessos-por-módulo)).
-
-### Autenticação
-
-Os usuários e as senhas ficam no **Supabase Auth**. O painel conversa só com esta API, e a API conversa com o Supabase usando a chave secreta, que nunca sai do servidor. A única exceção é o login com Google, em que o navegador passa pelo Supabase e pelo Google antes de voltar ao painel:
-
-```
-Painel (Angular) → API (Spring) → Supabase Auth / Postgres
-```
-
-| Método | Rota | Descrição | Sucesso | Erros |
-|---|---|---|---|---|
-| `POST` | `/api/v1/auth/registro` | Cria a conta (`nome`, `email`, `senha`) com papel `USUARIO` e já abre a sessão | 201 | 400, 409, 503 |
-| `POST` | `/api/v1/auth/login` | Abre a sessão com e-mail e senha | 200 | 400, 401, 503 |
-| `POST` | `/api/v1/auth/google` | Conclui o [login com Google](#login-com-google): troca `codigo` e `verificador` pela sessão | 200 | 400, 401, 503 |
-| `POST` | `/api/v1/auth/refresh` | Troca o `refreshToken` por uma sessão nova | 200 | 400, 401 |
-
-Resposta do login, do registro e do login com Google:
-
-```json
-{
-  "accessToken": "eyJhbGciOiJFUzI1NiIs...",
-  "refreshToken": "v1.MjQ0...",
-  "expiraEm": "2026-11-03T13:00:00Z",
-  "usuario": {
-    "id": "6f1c2b0e-...", "nome": "Maria Souza", "email": "maria@exemplo.com",
-    "papel": "USUARIO", "acessos": ["dashboard", "produtos"]
-  }
-}
-```
-
-Como funciona por dentro:
-
-- O `accessToken` é um JWT assinado pelo Supabase com **ES256**. A API valida assinatura (chaves públicas do JWKS do projeto), emissor, audiência `authenticated` e expiração, sem consultar o Supabase a cada requisição.
-- O papel e os acessos ficam na tabela `public.perfis` do Supabase. Um trigger copia os dois para o `app_metadata` do usuário, que vai dentro do JWT e que o próprio usuário não consegue alterar. A API converte esses valores em `ROLE_ADMIN` ou `ROLE_USUARIO` e em um `MODULO_*` para cada módulo liberado.
-- Novas contas são criadas pela API de administração do Supabase já com o e-mail confirmado, para que a pessoa entre logo depois do registro.
-
-### Login com Google
-
-O login com Google usa o provedor Google do Supabase Auth no fluxo **PKCE** ([RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)). O token nunca aparece na URL: o navegador recebe só um código de uso único, que de nada serve sem o verificador guardado na aba que iniciou o login.
-
-```
-1. Painel   gera o verificador (aleatório) e guarda na aba; calcula o desafio = SHA-256(verificador)
-2. Painel → Supabase /auth/v1/authorize?provider=google&code_challenge=<desafio>&redirect_to=<painel>/auth/callback
-3. Supabase → Google (a pessoa escolhe a conta) → Supabase → <painel>/auth/callback?code=<código>
-4. Painel → API   POST /api/v1/auth/google  { "codigo": "<código>", "verificador": "<verificador>" }
-5. API → Supabase POST /auth/v1/token?grant_type=pkce  { auth_code, code_verifier }
-6. API → Painel   mesma sessão do login com senha (accessToken, refreshToken, usuario com papel e acessos)
-```
-
-| Campo | Regras |
-|---|---|
-| `codigo` | Obrigatório, até 512 caracteres. É o parâmetro `code` do retorno |
-| `verificador` | Obrigatório, de 43 a 128 caracteres. O Supabase confere se o hash dele bate com o desafio do passo 2 |
-
-**Quem pode entrar**
-
-- **E-mail que já tem conta** (criada pelo registro ou por um admin, seja `USUARIO` ou `ADMIN`): o Supabase vincula o Google à conta existente, e a pessoa entra nela com o mesmo papel, os mesmos acessos e o mesmo nome. Depois disso, ela pode entrar tanto com a senha quanto com o Google.
-- **E-mail novo:** a conta é criada como `USUARIO` com os acessos padrão (`dashboard` e `produtos`), igual ao registro. O nome vem do perfil do Google.
-- Um código expirado, já usado ou com verificador errado responde **401** com `"Login com Google expirado ou inválido. Tente novamente."`.
-
-**Configuração (feita uma vez)**
-
-| Onde | O que configurar |
-|---|---|
-| [Google Cloud: tela de consentimento](https://console.cloud.google.com/auth/branding) | App externo e publicado, com os escopos `openid`, `email` e `profile` |
-| [Google Cloud: clientes OAuth](https://console.cloud.google.com/auth/clients) | Cliente do tipo **Aplicativo da Web**. Origens: o domínio do painel e `http://localhost:4200`. URI de redirecionamento: `https://<projeto>.supabase.co/auth/v1/callback` |
-| Supabase: *Authentication > Sign In / Providers > Google* | Ativar e colar o Client ID e o Client Secret do Google |
-| Supabase: *Authentication > URL Configuration* | Site URL do painel e, em Redirect URLs, `<painel>/auth/callback` e `http://localhost:4200/auth/callback` |
-
-O Client ID e o Client Secret do Google ficam **só no Supabase**. A API não precisa de nenhuma variável nova: ela troca o código usando a mesma `SUPABASE_SECRET_KEY` do login com senha.
-
-### Usuários (`/api/v1/usuarios`)
-
-| Método | Rota | Quem pode | Descrição | Sucesso | Erros |
-|---|---|---|---|---|---|
-| `GET` | `/me` | Qualquer usuário logado | Dados do usuário logado, com papel e acessos atuais | 200 | 401 |
-| `GET` | `/` | `ADMIN` | Lista os usuários em ordem alfabética, com papel e acessos (`page`, `size` de 1 a 100) | 200 | 400, 401, 403 |
-| `PUT` | `/{id}` | `ADMIN` | Edita nome, e-mail, papel (cargo) e acessos | 200 | 400, 401, 403, 404, 409, 422 |
-| `PUT` | `/{id}/senha` | `ADMIN` | Define uma nova senha (`{"senha": "..."}`, de 6 a 72 caracteres) | 204 | 400, 401, 403, 404 |
-
-Corpo do `PUT /{id}`:
-
-```json
-{ "nome": "Maria Souza", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"] }
-```
-
-- Um administrador não pode remover o próprio acesso de administrador (422), o que garante que sempre reste ao menos um.
-- Nome e e-mail ficam no Supabase Auth (é com o e-mail que se entra) e só são enviados a ele quando mudam. Um e-mail que já pertence a outra conta responde 409. O novo e-mail já fica confirmado.
-- **Senhas não podem ser consultadas**, nem por administradores: o Supabase guarda apenas o hash (bcrypt). Por isso existe "definir nova senha", e não "ver senha".
-- Papel e acessos novos valem para o usuário afetado no próximo login ou renovação de sessão (em até 1 hora).
-
-### Acessos por módulo
-
-Além do papel, cada usuário tem uma lista de **acessos** que define quais módulos do painel ele pode usar. Ela fica na coluna `acessos` (jsonb) da tabela `public.perfis` do Supabase.
-
-**Valores aceitos**
-
-| Valor | Significado |
-|---|---|
-| `["*"]` | Acesso total: todos os módulos permitidos ao papel |
-| `["dashboard", "produtos"]` | Apenas os módulos listados (padrão de toda conta nova) |
-| `["dashboard"]` | Só o dashboard |
-| `[]` | Nenhum módulo: a pessoa entra, mas o painel mostra "Nenhum módulo liberado" |
-
-Módulos existentes: `dashboard`, `produtos` e `usuarios`.
-
-**Regras**
-
-- `ADMIN` tem sempre `["*"]`. Isso é garantido em três lugares: um trigger no banco, a normalização da API e o converter do token, que ignora a lista para administradores.
-- O módulo `usuarios` é **exclusivo de administradores**. Para um `USUARIO`, `*` libera todos os módulos exceto esse, e enviar `"usuarios"` na lista responde 400.
-- A API grava a forma canônica: `*` prevalece sobre o resto, repetições são removidas e os módulos ficam na ordem do menu (`["produtos", "dashboard", "produtos"]` vira `["dashboard", "produtos"]`).
-- Valores desconhecidos são recusados com 400 pela API e por uma `check constraint` no banco.
-
-**O que cada módulo libera na API**
-
-| Rota | Exige |
-|---|---|
-| `GET /api/v1/produtos/resumo` | `dashboard` |
-| `GET /api/v1/produtos/**` (catálogo, produto, histórico) | `dashboard` ou `produtos` (o dashboard mostra a lista do que repor) |
-| `POST`, `PUT`, `DELETE` em `/api/v1/produtos/**` (inclusive movimentações) | `produtos` |
-| `/api/v1/usuarios/**` (exceto `/me`) | papel `ADMIN` |
-
-**Como funciona por dentro**
-
-```
-perfis.acessos ──trigger──▶ auth.users.app_metadata.acessos ──▶ JWT ──▶ PermissoesDoTokenConverter ──▶ MODULO_DASHBOARD, MODULO_PRODUTOS...
-```
-
-1. O admin altera os acessos pelo painel (`PUT /api/v1/usuarios/{id}`) ou direto no banco.
-2. O trigger `ao_definir_papel` copia papel e acessos para o `app_metadata` do usuário no Supabase Auth.
-3. No próximo login ou renovação, o JWT sai com os acessos novos. O `PermissoesDoTokenConverter` transforma cada módulo liberado em uma autoridade `MODULO_*`, que o `SecurityConfig` exige rota a rota.
-4. O painel usa a mesma regra para esconder menus e bloquear rotas, mas quem decide de fato é a API.
-
-Tokens emitidos antes da coluna existir não trazem `acessos` e recebem o padrão (`dashboard` e `produtos`), então ninguém perde acesso na migração.
-
-**Alterar direto no banco (SQL Editor do Supabase)**
-
-```sql
--- Limitar uma pessoa ao dashboard
-update public.perfis set acessos = '["dashboard"]' where email = 'maria@exemplo.com';
-
--- Liberar tudo
-update public.perfis set acessos = '["*"]' where email = 'maria@exemplo.com';
-```
-
-A estrutura da coluna:
-
-```sql
-acessos jsonb not null default '["dashboard", "produtos"]'
-  check (jsonb_typeof(acessos) = 'array'
-         and acessos <@ '["*", "dashboard", "produtos", "usuarios"]'
-         and (papel = 'ADMIN' or not acessos ? 'usuarios'))
-```
-
-**Adicionar um módulo novo** exige quatro passos: incluir a chave no enum `Modulo` da API, ampliar a `check constraint` da coluna, proteger as rotas dele no `SecurityConfig` com `Modulo.X.autoridade()` e cadastrá-lo na lista `MODULOS` do painel.
-
-### Produtos (`/api/v1/produtos`)
-
-| Método | Rota | Descrição | Sucesso | Erros |
-|---|---|---|---|---|
-| `GET` | `/` | Lista os produtos com paginação, busca e ordenação | 200 | 400 |
-| `GET` | `/resumo` | Indicadores do estoque | 200 | — |
-| `GET` | `/{id}` | Busca um produto pelo id | 200 + `ETag` | 400, 404 |
-| `POST` | `/` | Cria um produto | 201 + `Location` + `ETag` | 400 |
-| `PUT` | `/{id}` | Atualiza todos os dados de um produto (aceita `If-Match`) | 200 + `ETag` | 400, 404, 409 |
-| `DELETE` | `/{id}` | Remove um produto e o seu histórico | 204 | 400, 404 |
-
-Parâmetros da listagem:
-
-| Parâmetro | Padrão | Regras |
-|---|---|---|
-| `busca` | — | Trecho do nome ou da descrição, sem diferenciar maiúsculas |
-| `page` | `0` | A partir de 0 |
-| `size` | `20` | De 1 a 500 |
-| `sort` | `nome,asc` | `coluna,asc` ou `coluna,desc`. Colunas: `nome`, `preco`, `quantidadeEmEstoque`, `criadoEm`, `atualizadoEm` |
-
-Resposta da listagem:
-
-```json
-{
-  "conteudo": [
-    {
-      "id": "3f2b8c1e-6a4d-4e2b-9c1a-7d5e8f9a0b1c",
-      "nome": "Teclado mecânico",
-      "descricao": "Teclado ABNT2 com switches marrons e iluminação RGB",
-      "preco": 349.90,
-      "quantidadeEmEstoque": 30,
-      "criadoEm": "2026-11-03T12:00:00Z",
-      "atualizadoEm": "2026-11-03T12:05:00Z",
-      "versao": 2
-    }
-  ],
-  "pagina": 0,
-  "tamanho": 20,
-  "totalElementos": 1,
-  "totalPaginas": 1
-}
-```
-
-Corpo de criação e atualização:
-
-```json
-{
-  "nome": "Teclado mecânico",
-  "descricao": "Teclado mecânico ABNT2 com switches marrons",
-  "preco": 349.90,
-  "quantidadeEmEstoque": 25
-}
-```
-
-| Campo | Regras |
-|---|---|
-| `nome` | Obrigatório, até 120 caracteres |
-| `descricao` | Opcional, até 500 caracteres |
-| `preco` | Obrigatório, maior que zero, até 2 casas decimais |
-| `quantidadeEmEstoque` | Obrigatório, maior ou igual a zero |
-| `versao` | Opcional, usado no `PUT` como alternativa ao `If-Match`. Se os dois vierem, vale o cabeçalho |
-
-Resposta do resumo:
-
-```json
-{
-  "totalProdutos": 15,
-  "totalItens": 216,
-  "valorTotal": 118132.30,
-  "esgotados": 2,
-  "estoqueBaixo": 5,
-  "limiteEstoqueBaixo": 5
-}
-```
-
-O limite de estoque baixo é configurável em `app.estoque.limite-baixo`.
-
-### Edição concorrente com ETag
-
-1. `GET /api/v1/produtos/{id}` responde com `ETag: "3"`.
-2. O cliente envia `PUT /api/v1/produtos/{id}` com `If-Match: "3"`.
-3. Se ninguém alterou o produto, a resposta é 200 com `ETag: "4"`. Se alguém alterou, a resposta é 409 e nada é sobrescrito.
-
-`If-Match: *` atualiza sem checagem, e um `If-Match` malformado retorna 400. Sem cabeçalho e sem `versao` no corpo, a atualização acontece normalmente, para não quebrar clientes simples.
-
-### Movimentações de estoque (`/api/v1/produtos/{id}/movimentacoes`)
-
-| Método | Rota | Descrição | Sucesso | Erros |
-|---|---|---|---|---|
-| `POST` | `/` | Registra uma entrada ou saída | 201 | 400, 404, 422 |
-| `GET` | `/` | Histórico do produto, do mais recente para o mais antigo (`page`, `size` de 1 a 100) | 200 | 400, 404 |
-
-```json
-{ "tipo": "SAIDA", "quantidade": 5, "motivo": "Venda para cliente corporativo" }
-```
-
-`tipo` aceita `ENTRADA` ou `SAIDA`. Movimentações do tipo `AJUSTE` são criadas pela própria API quando a edição de um produto altera a quantidade.
-
-### Exemplos com curl
+### Testes
 
 ```bash
-# Criar uma conta (ou use /login com uma conta existente) e guardar o token
-curl -X POST http://localhost:8080/api/v1/auth/registro \
-  -H "Content-Type: application/json" \
-  -d '{"nome":"Maria Souza","email":"maria@exemplo.com","senha":"minhaSenha123"}'
-TOKEN="cole aqui o accessToken da resposta"
-
-# Listar a segunda página dos mais caros que contenham "mouse"
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/produtos?busca=mouse&page=1&size=10&sort=preco,desc"
-
-# Criar
-curl -i -X POST http://localhost:8080/api/v1/produtos \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"nome":"Teclado mecânico","descricao":"ABNT2","preco":349.90,"quantidadeEmEstoque":25}'
-
-# Ler o produto e a versão atual (veja o cabeçalho ETag)
-curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/produtos/{id}
-
-# Atualizar somente se ninguém tiver alterado desde a leitura
-curl -i -X PUT http://localhost:8080/api/v1/produtos/{id} \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -H 'If-Match: "0"' \
-  -d '{"nome":"Teclado mecânico RGB","descricao":"ABNT2","preco":399.90,"quantidadeEmEstoque":20}'
-
-# Registrar uma saída de estoque
-curl -i -X POST http://localhost:8080/api/v1/produtos/{id}/movimentacoes \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"tipo":"SAIDA","quantidade":5,"motivo":"Venda"}'
-
-# Resumo do estoque
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/produtos/resumo
-
-# Remover
-curl -i -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/produtos/{id}
-
-# Dados do usuário logado
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/usuarios/me
-
-# (ADMIN) Limitar um usuário ao dashboard
-curl -X PUT http://localhost:8080/api/v1/usuarios/{id} \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"nome": "Maria Souza", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"]}'
-
-# (ADMIN) Definir uma nova senha
-curl -i -X PUT http://localhost:8080/api/v1/usuarios/{id}/senha \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"senha": "novaSenha123"}'
+./mvnw clean verify             # Windows: .\mvnw.cmd clean verify
 ```
+
+São 233 testes. O build gera `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje em 98%). Nenhum teste acessa o Supabase: as chamadas HTTP são simuladas com `MockRestServiceServer`.
+
+| Classe de teste | O que cobre |
+|---|---|
+| `ProdutoTest` | Regras da entidade: normalização, entrada, saída e estoque insuficiente (sem Spring) |
+| `ProdutoServiceTest`, `MovimentacaoServiceTest` | CRUD, paginação, conflito de versão, ajuste automático, resumo e histórico (Mockito) |
+| `ProdutoControllerTest`, `MovimentacaoControllerTest` | Status, `Location`, `ETag`/`If-Match`, validação, CORS, 401 e 403 por módulo (`@WebMvcTest`) |
+| `JpaProdutoDAOTest`, `JpaMovimentacaoDAOTest` | Consultas JPQL, auditoria, versão e agregados no H2 real (`@DataJpaTest`) |
+| `AuthControllerTest`, `AuthServiceTest`, `SupabaseAuthClientTest` | Registro, login, Google, refresh; corpo enviado ao Supabase e tradução de cada erro |
+| `FalhaDoSupabaseTest` | Falhas do Supabase registradas no log só pelo status ou tipo, sem corpo nem URL |
+| `UsuarioControllerTest`, `UsuarioServiceTest`, `SupabasePerfilDAOTest` | Lista, edição, nova senha, `/opcoes`; PostgREST, `Content-Range` e colunas do perfil |
+| `PermissoesDoTokenConverterTest`, `AcessosTest` | `ROLE_*` e `MODULO_*` a partir do token; forma canônica dos acessos e padrão de conta nova |
+| `MeuPerfilControllerTest`, `MeuPerfilServiceTest`, `SupabaseStorageClientTest`, `FormatoDeImagemTest` | `/usuarios/me`, multipart, 413, imagem falsa recusada, troca e remoção da foto no Storage |
+| `DemandaControllerTest`, `DemandaServiceTest`, `SupabaseDemandaDAOTest` | Filtros, `responsavel=me`, criação no fim da coluna, mover pela função, exclusão só do autor ou admin |
+| `FinanceiroControllerTest`, `ContaServiceTest`, `SupabaseContaDAOTest` | Os dois tipos de conta, regra do Pix, baixa sem data futura, conta já quitada, filtros, paginação e resumo |
+| `GlobalExceptionHandlerTest`, `ProdutosApiApplicationTests` | Formato RFC 9457 de cada erro sem vazar detalhes; subida do contexto |
 
 ### Formato dos erros
 
-Os erros seguem o padrão [RFC 9457 (Problem Details)](https://www.rfc-editor.org/rfc/rfc9457), com `Content-Type: application/problem+json`. Exemplo de erro de validação:
+Todos os erros seguem a [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) com `Content-Type: application/problem+json`. O Swagger mostra o exemplo de cada um.
 
 ```json
 {
@@ -474,162 +265,97 @@ Os erros seguem o padrão [RFC 9457 (Problem Details)](https://www.rfc-editor.or
   "status": 400,
   "detail": "Um ou mais campos são inválidos",
   "instance": "/api/v1/produtos",
-  "erros": [
-    { "campo": "nome", "mensagem": "O nome é obrigatório" },
-    { "campo": "preco", "mensagem": "O preço deve ser maior que zero" }
-  ]
+  "erros": [{ "campo": "nome", "mensagem": "O nome é obrigatório" }]
 }
 ```
 
-Outros exemplos:
+Outros status: 401 (sem token), 403 (sem o módulo ou papel), 404, 409 (edição concorrente ou e-mail repetido), 413 (arquivo grande), 422 (regra de negócio, como estoque insuficiente) e 503 (Supabase indisponível ou chave ausente). Mensagens do Supabase nunca são repassadas cruas.
 
-```json
-{ "title": "Conflito de edição", "status": 409,
-  "detail": "O produto 3f2b8c1e-... foi alterado por outra pessoa. Recarregue os dados e tente novamente." }
-
-{ "title": "Estoque insuficiente", "status": 422,
-  "detail": "Estoque insuficiente: há 3 unidade(s) disponível(is) e a saída pedida é de 5" }
-
-{ "title": "Não autenticado", "status": 401,
-  "detail": "Faça login e envie o token no cabeçalho Authorization: Bearer <token>" }
-
-{ "title": "Acesso negado", "status": 403,
-  "detail": "Seu usuário não tem permissão para esta operação. Peça a um administrador para liberar o acesso." }
-```
-
-## Arquitetura
+### Arquitetura
 
 ```
 br.com.triboraizes.produtosapi
-├── config        OpenAPI, CORS, segurança, Supabase e carga dos dados iniciais
-├── controller    Endpoints REST (somente HTTP, sem regra de negócio)
+├── config        OpenAPI, CORS, segurança, relógio (fuso de Brasília), Supabase e dados iniciais
+├── controller    Endpoints REST (só HTTP, sem regra de negócio)
 ├── service       Regras de negócio e transações
-├── dao           Contratos (ProdutoDAO, MovimentacaoDAO, PerfilDAO) e implementações JPA e Supabase
+├── dao           Contratos e implementações: JPA (produtos) e Supabase (perfis, demandas, contas)
 ├── factory       DAOFactory: criação dos DAOs JPA
-├── client        SupabaseAuthClient: chamadas ao Supabase Auth
-├── security      Conversão do papel e dos acessos do JWT em permissões do Spring Security
-├── dto           Dados de entrada e saída da API
-├── model         Entidades JPA (Produto, MovimentacaoEstoque), Perfil, Papel, Modulo, Acessos e objetos de valor
+├── client        SupabaseAuthClient e SupabaseStorageClient
+├── security      Papel e acessos do JWT em permissões do Spring Security
+├── dto           Entrada e saída da API
+├── model         Entidades, enums e objetos de valor
 └── exception     Exceções de domínio e tratamento global de erros
 ```
 
-Fluxo de uma requisição de produto: `filtro JWT → Controller → Service → DAOFactory/DAO → JPA (EntityManager) → H2`. Fluxo de usuários: `Controller → Service → PerfilDAO / SupabaseAuthClient → API REST do Supabase`. Cada camada conhece apenas a camada imediatamente abaixo.
+- **DAO:** interfaces sem tecnologia exposta. `Jpa*DAO` usam o `EntityManager`; `Supabase*DAO` implementam os mesmos contratos sobre o PostgREST, e os serviços não sabem a diferença.
+- **Factory:** `DAOFactory` é o único ponto que conhece as implementações JPA; trocar a persistência mexe só nela.
+- **DTO:** records de entrada com validação e de saída; o cliente não define `id`, datas, saldo nem valor líquido.
 
-### Padrões de projeto aplicados
+### REST e SOLID
 
-- **DAO** (`dao/`): as interfaces definem as operações de persistência sem expor a tecnologia utilizada. As implementações `Jpa*DAO` usam o `EntityManager` do JPA com JPQL, sem depender do Spring. O `SupabasePerfilDAO` implementa `PerfilDAO` sobre a API REST do Supabase, e o `UsuarioService` não sabe disso.
-- **Factory** (`factory/DAOFactory`): é o único ponto que conhece as implementações concretas dos DAOs. Os serviços dependem apenas das interfaces, e trocar a persistência (por exemplo, JDBC puro ou outro banco) exige alterar somente a factory.
-- **DTO** (`dto/`): records de entrada (com validações) e de saída desacoplam o contrato da API das entidades. As entidades nunca são expostas, e o cliente não consegue definir campos que não deveria, como `id`, datas ou saldo.
-
-### REST e SOLID no projeto
-
-**REST**
-
-| Princípio | Como foi aplicado |
+| REST | Como foi aplicado |
 |---|---|
-| Recursos identificados por URL | `/produtos`, `/produtos/{id}` e o sub-recurso `/produtos/{id}/movimentacoes` |
-| Verbos com a semântica do HTTP | `GET` sem efeito colateral; `POST` cria; `PUT` substitui o recurso inteiro; `DELETE` remove |
-| Status corretos | 200, 201 com `Location`, 204, 400, 404, 409 e 422 |
-| Controle de concorrência do HTTP | `ETag` nas respostas e `If-Match` no `PUT` ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#name-if-match)) |
-| Erros padronizados | `application/problem+json` (RFC 9457) |
-| Versionamento | Pela URL (`/api/v1`) |
-| Sem estado no servidor | Nenhuma sessão: cada requisição carrega tudo o que precisa, inclusive o JWT |
+| Recursos e sub-recursos | `/produtos/{id}/movimentacoes`, `/usuarios/me/avatar`, `/demandas/{id}/status`, `/financeiro/contas-pagar/{id}/baixa` |
+| Verbos com semântica | `GET` sem efeito; `POST` cria; `PUT` substitui; `PATCH` muda um aspecto (status, baixa); `DELETE` remove |
+| Status corretos | 200, 201 com `Location`, 204, 400, 401, 403, 404, 409, 413, 422, 503 |
+| Concorrência | `ETag` e `If-Match` |
+| Sem estado e versionada | JWT em cada requisição; `/api/v1` |
 
-**SOLID**
-
-| Princípio | Onde aparece |
+| SOLID | Onde aparece |
 |---|---|
-| **S**: responsabilidade única | `ProdutoController` só traduz HTTP, `ProdutoService` só aplica regras e transações, `JpaProdutoDAO` só persiste, `GlobalExceptionHandler` só formata erros |
-| **O**: aberto para extensão, fechado para modificação | Uma nova persistência é uma nova implementação de `ProdutoDAO`, criada pela `DAOFactory`, sem mexer nos serviços. Um novo erro é uma nova exceção com seu handler |
-| **L**: substituição de Liskov | Qualquer implementação de `ProdutoDAO` ou `MovimentacaoDAO` pode substituir a JPA: os testes de serviço provam isso usando DAOs falsos |
-| **I**: segregação de interfaces | Um DAO por agregado (`ProdutoDAO` e `MovimentacaoDAO`), cada um só com as operações que os serviços usam |
-| **D**: inversão de dependência | Os serviços dependem das interfaces dos DAOs e recebem a `DAOFactory` por injeção no construtor; não conhecem `EntityManager` nem JPQL |
+| Responsabilidade única | Controller traduz HTTP, service aplica regras, DAO persiste, `GlobalExceptionHandler` formata erros |
+| Aberto/fechado | Nova persistência é nova implementação do DAO; novo erro é nova exceção com handler |
+| Liskov | Testes de serviço trocam os DAOs por falsos sem mudar o comportamento |
+| Segregação de interfaces | Um DAO por agregado, só com o que os serviços usam |
+| Inversão de dependência | Serviços dependem das interfaces e recebem tudo pelo construtor |
 
-### Boas práticas adotadas
+### Segurança
 
-- Injeção de dependência por construtor e campos `final`.
-- Entidades sem setters públicos: as alterações passam por métodos de domínio (`atualizar`, `registrarEntrada`, `registrarSaida`), e a regra de estoque não negativo fica na própria entidade.
-- Transações declaradas nos serviços, somente leitura por padrão.
-- `open-in-view` desativado: o acesso ao banco fica restrito à camada de serviço.
-- Ordenação dinâmica limitada a uma lista fechada de colunas, sem risco de injeção na consulta.
-- Erros padronizados (RFC 9457) e sem exposição de stack trace.
-- Perfis `dev` e `prod`: o console H2 fica disponível apenas em desenvolvimento.
-- Cobertura mínima verificada no build, para que a qualidade dos testes não regrida.
+**Onde fica cada segredo**
 
-### Decisões de design
+| Segredo | Onde fica |
+|---|---|
+| `SUPABASE_SECRET_KEY` | Só nas variáveis de ambiente do Render e da máquina local |
+| Client ID e Client Secret do Google | Só no Supabase |
+| Senhas dos usuários | Só como hash no Supabase Auth |
 
-- `PUT` substitui todos os dados do produto e retorna 404 se o id não existir (não cria o recurso, pois o id é gerado pela API).
-- A checagem de versão é opcional no `PUT` para não quebrar clientes simples. Quem envia `If-Match` (ou `versao`) ganha proteção contra sobrescrever edições de outras pessoas. Edições realmente simultâneas também são detectadas pelo `@Version` e retornam 409.
-- A listagem tem tamanho máximo de 500 itens por página, o suficiente para o painel carregar o catálogo de uma vez e filtrar no navegador, sem permitir respostas ilimitadas.
-- Movimentações são um sub-recurso do produto (`/produtos/{id}/movimentacoes`) e são imutáveis: corrigir um erro é registrar uma nova movimentação.
-- `DELETE` remove o produto junto com o seu histórico; um produto já removido retorna 404.
-- A API é versionada pela URL (`/api/v1`), permitindo evoluir o contrato sem quebrar clientes.
+Variáveis de ambiente: `SUPABASE_SECRET_KEY` (obrigatória para login e módulos do Supabase), `SUPABASE_URL` (tem padrão), `CORS_ALLOWED_ORIGINS`, `DADOS_INICIAIS` e `PORT`. O painel conhece só a URL pública do Supabase.
 
-## Segurança
+**Proteções**
 
-**O que já existe**
+- JWT ES256 validado localmente; papel e acessos vêm do `app_metadata`, que só a chave secreta altera.
+- Tabelas do Supabase com RLS ligado e sem políticas: nada é acessível com a chave pública, só pela API. Funções com `search_path` fixo e `execute` revogado de `anon` e `authenticated`.
+- Bucket `avatars`: leitura pública só dos arquivos, sem listagem nem escrita pública; nome em UUID; tipo validado pelo conteúdo; 2 MB.
+- Dados mínimos: `/usuarios/opcoes` devolve só id, nome e foto; contas e chaves Pix só com o módulo `financeiro`.
+- Logs registram id ou e-mail, nunca tokens, código do Google, verificador PKCE, chave ou corpo de resposta do Supabase.
+- Bean Validation em todos os campos, JPQL parametrizada e ordenação por lista fechada.
+- CORS restrito às origens do painel; erros sem stack trace; console H2 só em `dev`; Actuator só com `/health`; container sem root; ids UUID.
 
-- **Autenticação com JWT** emitido pelo Supabase Auth (ES256). A API é um resource server sem estado: valida assinatura, emissor, audiência e expiração de cada token. Senhas nunca passam pelo banco desta API.
-- **Login com Google no fluxo PKCE:** o token não trafega na URL, o código de retorno é de uso único e só funciona junto com o verificador que ficou na aba de origem. O Supabase só redireciona para endereços da lista permitida, e o Client Secret do Google fica no Supabase, fora da API e do painel.
-- **Autorização por papel e por módulo:** papel (`ADMIN`, `USUARIO`) e acessos são lidos do `app_metadata` do token, que só a chave secreta consegue alterar. Rotas de produtos exigem o módulo correspondente, rotas de gestão de usuários exigem `ADMIN`, e um admin não pode remover o próprio acesso de administrador.
-- **Senhas inacessíveis:** ficam só como hash no Supabase Auth. Nem a API nem os administradores conseguem lê-las, apenas definir uma nova.
-- **Chave secreta só no servidor:** a `SUPABASE_SECRET_KEY` vem de variável de ambiente, nunca do repositório. O painel não chama o Supabase; no login com Google ele apenas redireciona o navegador.
-- **Tabela de perfis protegida por RLS** sem políticas públicas: só o backend, com a chave secreta, lê e escreve.
-- **Validação de entrada** com Bean Validation em todos os campos, com limites de tamanho e de valor (inclusive na quantidade de uma movimentação e no tamanho da página).
-- **Consultas parametrizadas** em JPQL. A ordenação dinâmica só aceita colunas de uma lista fechada, então não há como injetar SQL pela URL.
-- **CORS restrito** a `/api/**` e às origens configuradas em `app.cors.allowed-origins`: o frontend local e os deploys do painel na Vercel. Outras origens recebem 403.
-- **Nenhum detalhe interno nas respostas:** erros inesperados retornam uma mensagem genérica, e o stack trace fica só no log do servidor.
-- **Superfície mínima em produção:** o console H2 é desligado no perfil `prod`, e o Actuator expõe apenas `/health`, sem detalhes.
-- **Container sem privilégios:** a imagem Docker roda com usuário não-root.
-- **Ids não sequenciais (UUID)**, que não revelam quantos registros existem nem permitem percorrer a base adivinhando ids.
-- **Proteção contra sobrescrita acidental** com `ETag` e `If-Match`.
+**O que não existe, e por quê:** não há rate limit próprio (o Supabase Auth já limita tentativas de login), revogação imediata de token (expira em 1 hora) nem cofre de segredos (uma única chave no Render). Em produção, entrariam Bucket4j ou gateway, tokens mais curtos e um gerenciador de segredos com rotação.
 
-**O que não existe, e por quê**
+### Deploy no Render
 
-| Ausente | Motivo neste projeto | O que seria feito em produção |
-|---|---|---|
-| Limite de requisições próprio | O Supabase Auth já limita tentativas de login; o restante é um banco em memória sem dado real | Rate limit por IP ou por usuário (Bucket4j ou no gateway), respondendo 429 |
-| Revogação imediata de token | O `accessToken` expira em 1 hora e a troca de papel ou de acessos vale na próxima renovação | Tokens mais curtos ou checagem do papel no banco a cada requisição sensível |
-| Cofre de segredos | Uma única chave, guardada nas variáveis de ambiente do Render | Vault ou o gerenciador de segredos do provedor de nuvem, com rotação |
-| Auditoria de quem alterou | Os produtos ficam no H2 em memória e reiniciam com o serviço | Gravar o `sub` do JWT junto com `criadoEm` e `atualizadoEm` |
+O `Dockerfile` multi-stage compila com JDK 21 e roda com JRE 21 Alpine, usuário não-root e perfil `prod`.
 
-## Deploy no Render
+1. Crie um **Web Service** com runtime **Docker** a partir do repositório.
+2. **Health Check Path:** `/actuator/health`.
+3. **Environment:** `SUPABASE_SECRET_KEY`. Opcionais: `CORS_ALLOWED_ORIGINS` (substitui a lista padrão) e `DADOS_INICIAIS=false`.
+4. A cada push, faça **Manual Deploy > Deploy latest commit** (o auto-deploy está desligado).
 
-O projeto inclui um `Dockerfile` multi-stage (build com JDK 21 e execução com JRE 21 Alpine, usuário não-root e perfil `prod`).
-
-1. No Render, crie um **Web Service** a partir do repositório.
-2. Selecione o runtime **Docker** (o `Dockerfile` da raiz é detectado automaticamente).
-3. Em **Health Check Path**, informe `/actuator/health`.
-4. Em **Environment**, defina `SUPABASE_SECRET_KEY` com a chave secreta do projeto Supabase. A porta é lida da variável `PORT` fornecida pelo Render, e `SUPABASE_URL` já tem como padrão o projeto usado aqui.
-5. Opcional: para liberar o CORS para outro domínio de frontend, defina `CORS_ALLOWED_ORIGINS` com as origens separadas por vírgula (por exemplo, `http://localhost:4200,https://meu-painel.vercel.app`). O valor substitui a lista padrão.
-6. Opcional: defina `DADOS_INICIAIS=false` para a aplicação subir sem os produtos de exemplo.
-
-Limitações do plano gratuito:
-
-- O serviço "dorme" após cerca de 15 minutos sem requisições; a primeira chamada seguinte pode levar perto de um minuto.
-- Como o banco é em memória, os dados voltam ao estado inicial sempre que o serviço reinicia.
-
-Para executar o container localmente:
+No plano gratuito, o serviço dorme após uns 15 minutos sem uso, e os produtos (H2) voltam ao estado inicial a cada reinício; os dados do Supabase permanecem.
 
 ```bash
 docker build -t produtos-api .
-docker run -p 8080:8080 -e SUPABASE_SECRET_KEY="sb_secret_..." produtos-api
+docker run -p 8080:8080 -e SUPABASE_SECRET_KEY="<SUPABASE_SECRET_KEY>" produtos-api
 ```
 
-## Referências
+### Referências
 
-- [Spring Boot](https://docs.spring.io/spring-boot/index.html)
-- [Spring Web MVC](https://docs.spring.io/spring-framework/reference/web/webmvc.html) e [tratamento de erros com ProblemDetail](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html)
-- [Jakarta Persistence (JPA)](https://jakarta.ee/specifications/persistence/) e [Hibernate ORM](https://hibernate.org/orm/documentation/)
-- [Jakarta Bean Validation](https://beanvalidation.org/)
-- [H2 Database](https://www.h2database.com/)
-- [springdoc-openapi](https://springdoc.org/) e [OpenAPI Specification](https://spec.openapis.org/oas/latest.html)
+- [Spring Boot](https://docs.spring.io/spring-boot/index.html), [Spring Web MVC](https://docs.spring.io/spring-framework/reference/web/webmvc.html) e [ProblemDetail](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html)
+- [Spring Security: Resource Server JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
+- [Jakarta Persistence](https://jakarta.ee/specifications/persistence/), [Hibernate](https://hibernate.org/orm/documentation/), [Bean Validation](https://beanvalidation.org/) e [H2](https://www.h2database.com/)
+- [springdoc-openapi](https://springdoc.org/)
 - [JUnit 5](https://junit.org/junit5/docs/current/user-guide/), [Mockito](https://site.mockito.org/), [AssertJ](https://assertj.github.io/doc/) e [JaCoCo](https://www.jacoco.org/jacoco/trunk/doc/)
-- [Spring Security: OAuth2 Resource Server com JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
-- [Supabase Auth](https://supabase.com/docs/guides/auth), [chaves de assinatura do JWT](https://supabase.com/docs/guides/auth/signing-keys) e [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Supabase: login com Google](https://supabase.com/docs/guides/auth/social-login/auth-google), [fluxo PKCE](https://supabase.com/docs/guides/auth/sessions/pkce-flow) e [vínculo de identidades](https://supabase.com/docs/guides/auth/auth-identity-linking)
-- [RFC 7636: PKCE](https://www.rfc-editor.org/rfc/rfc7636)
-- [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
-- [RFC 9110: HTTP Semantics (ETag e If-Match)](https://www.rfc-editor.org/rfc/rfc9110)
-- [Render: deploy com Docker](https://render.com/docs/docker)
-- [GitHub Actions](https://docs.github.com/actions)
+- [Supabase Auth](https://supabase.com/docs/guides/auth), [login com Google](https://supabase.com/docs/guides/auth/social-login/auth-google), [PKCE](https://supabase.com/docs/guides/auth/sessions/pkce-flow), [PostgREST](https://supabase.com/docs/guides/api), [Storage](https://supabase.com/docs/guides/storage) e [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [RFC 7636 (PKCE)](https://www.rfc-editor.org/rfc/rfc7636), [RFC 9110 (ETag e If-Match)](https://www.rfc-editor.org/rfc/rfc9110) e [RFC 9457 (Problem Details)](https://www.rfc-editor.org/rfc/rfc9457)
+- [Render: Docker](https://render.com/docs/docker) e [GitHub Actions](https://docs.github.com/actions)

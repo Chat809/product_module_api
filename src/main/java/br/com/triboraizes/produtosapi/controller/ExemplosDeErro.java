@@ -121,6 +121,78 @@ final class ExemplosDeErro {
               "instance": "/api/v1/auth/login"
             }""";
 
+    static final String IMAGEM_INVALIDA = """
+            {
+              "title": "Parâmetro inválido",
+              "status": 400,
+              "detail": "Formato não suportado. Envie uma imagem PNG, JPEG ou WEBP",
+              "instance": "/api/v1/usuarios/me/avatar"
+            }""";
+
+    static final String ARQUIVO_GRANDE = """
+            {
+              "title": "Arquivo muito grande",
+              "status": 413,
+              "detail": "A imagem deve ter no máximo 2 MB",
+              "instance": "/api/v1/usuarios/me/avatar"
+            }""";
+
+    static final String DADOS_INDISPONIVEIS = """
+            {
+              "title": "Serviço de dados indisponível",
+              "status": 503,
+              "detail": "Serviço de dados indisponível. Tente novamente.",
+              "instance": "/api/v1/demandas"
+            }""";
+
+    static final String DEMANDA_NAO_ENCONTRADA = """
+            {
+              "title": "Demanda não encontrada",
+              "status": 404,
+              "detail": "Demanda com id 7a2d3c1b-5e4f-4a6b-9c8d-1e2f3a4b5c6d não encontrada",
+              "instance": "/api/v1/demandas/7a2d3c1b-5e4f-4a6b-9c8d-1e2f3a4b5c6d"
+            }""";
+
+    static final String EXCLUSAO_DE_DEMANDA = """
+            {
+              "title": "Operação não permitida",
+              "status": 422,
+              "detail": "Só quem criou a demanda ou um administrador pode excluí-la",
+              "instance": "/api/v1/demandas/7a2d3c1b-5e4f-4a6b-9c8d-1e2f3a4b5c6d"
+            }""";
+
+    static final String RESPONSAVEL_INVALIDO = """
+            {
+              "title": "Parâmetro inválido",
+              "status": 400,
+              "detail": "Responsável não encontrado: 9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e",
+              "instance": "/api/v1/demandas"
+            }""";
+
+    static final String CONTA_NAO_ENCONTRADA = """
+            {
+              "title": "Conta não encontrada",
+              "status": 404,
+              "detail": "Conta com id 8c3e4d2a-6f5b-4c7d-8e9f-2a3b4c5d6e7f não encontrada",
+              "instance": "/api/v1/financeiro/contas-pagar/8c3e4d2a-6f5b-4c7d-8e9f-2a3b4c5d6e7f"
+            }""";
+
+    static final String CHAVE_PIX_OBRIGATORIA = """
+            {
+              "title": "Parâmetro inválido",
+              "status": 400,
+              "detail": "Informe a chave Pix quando a forma de pagamento for PIX",
+              "instance": "/api/v1/financeiro/contas-pagar"
+            }""";
+
+    static final String CONTA_JA_QUITADA = """
+            {
+              "title": "Operação não permitida",
+              "status": 422,
+              "detail": "Só contas pendentes podem receber baixa ou ser canceladas",
+              "instance": "/api/v1/financeiro/contas-pagar/8c3e4d2a-6f5b-4c7d-8e9f-2a3b4c5d6e7f/baixa"
+            }""";
+
     private ExemplosDeErro() {
     }
 }

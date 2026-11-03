@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.List;
@@ -106,6 +107,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(ServicoDeDadosIndisponivelException.class)
+    public ProblemDetail handleServicoDeDadosIndisponivel(ServicoDeDadosIndisponivelException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        problem.setTitle("Serviço de dados indisponível");
+        return problem;
+    }
+
+    @ExceptionHandler(DemandaNaoEncontradaException.class)
+    public ProblemDetail handleDemandaNaoEncontrada(DemandaNaoEncontradaException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Demanda não encontrada");
+        return problem;
+    }
+
+    @ExceptionHandler(ContaNaoEncontradaException.class)
+    public ProblemDetail handleContaNaoEncontrada(ContaNaoEncontradaException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Conta não encontrada");
+        return problem;
+    }
+
     /** Chamado pelo Spring Security (via {@code SecurityConfig}) quando falta o token ou ele é inválido. */
     @ExceptionHandler(AuthenticationException.class)
     public ProblemDetail handleNaoAutenticado(AuthenticationException ex) {
@@ -152,6 +174,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, "Um ou mais campos são inválidos");
         problem.setTitle("Dados inválidos");
         problem.setProperty("erros", erros);
+        return handleExceptionInternal(ex, problem, headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+                                                                          HttpHeaders headers,
+                                                                          HttpStatusCode status,
+                                                                          WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, "A imagem deve ter no máximo 2 MB");
+        problem.setTitle("Arquivo muito grande");
         return handleExceptionInternal(ex, problem, headers, status, request);
     }
 

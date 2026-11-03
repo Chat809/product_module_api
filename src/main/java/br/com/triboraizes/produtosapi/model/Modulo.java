@@ -8,6 +8,8 @@ import java.util.Optional;
 public enum Modulo {
     DASHBOARD,
     PRODUTOS,
+    DEMANDAS,
+    FINANCEIRO,
     USUARIOS;
 
     public String chave() {

@@ -239,6 +239,19 @@ class SupabaseAuthClientTest {
     }
 
     @Test
+    @DisplayName("Meu perfil: deve mudar só o nome, sem enviar e-mail")
+    void deveAtualizarNome() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andExpect(method(PUT))
+                .andExpect(content().json("{\"user_metadata\": {\"nome\": \"Maria S.\"}}", JsonCompareMode.STRICT))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.atualizarNome(ID, "Maria S.");
+
+        servidor.verify();
+    }
+
+    @Test
     @DisplayName("Deve redefinir a senha enviando só o campo password")
     void deveRedefinirSenha() {
         servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))

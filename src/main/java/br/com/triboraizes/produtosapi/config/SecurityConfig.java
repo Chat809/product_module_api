@@ -28,8 +28,8 @@ import java.util.Collection;
 
 /**
  * A API é um resource server: valida o JWT emitido pelo Supabase Auth (ES256, chaves públicas do JWKS)
- * e não guarda sessão. As rotas de produtos exigem o módulo correspondente ({@code MODULO_*}) e as de usuários,
- * o papel ADMIN. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
+ * e não guarda sessão. Produtos, demandas e financeiro exigem o módulo correspondente ({@code MODULO_*}),
+ * a gestão de usuários exige o papel ADMIN e "Meu perfil" vale para qualquer usuário logado. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
  */
 @Configuration
 @EnableConfigurationProperties(SupabaseProperties.class)
@@ -61,8 +61,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health", "/h2-console/**", "/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/me").authenticated()
+                        .requestMatchers("/api/v1/usuarios/me", "/api/v1/usuarios/me/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/opcoes")
+                        .hasAuthority(Modulo.DEMANDAS.autoridade())
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/demandas/**").hasAuthority(Modulo.DEMANDAS.autoridade())
+                        .requestMatchers("/api/v1/financeiro/**").hasAuthority(Modulo.FINANCEIRO.autoridade())
                         .requestMatchers(HttpMethod.GET, "/api/v1/produtos/resumo")
                         .hasAuthority(Modulo.DASHBOARD.autoridade())
                         // O dashboard também lê o catálogo e o histórico; alterar qualquer coisa exige o módulo de produtos.

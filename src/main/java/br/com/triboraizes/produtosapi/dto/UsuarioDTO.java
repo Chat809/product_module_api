@@ -16,15 +16,17 @@ public record UsuarioDTO(
         @Schema(example = "Maria Souza") String nome,
         @Schema(example = "maria@exemplo.com") String email,
         @Schema(example = "USUARIO") Papel papel,
-        @ArraySchema(arraySchema = @Schema(description = "Módulos liberados: '*' (todos) ou 'dashboard', 'produtos', 'usuarios'",
-                example = "[\"dashboard\", \"produtos\"]"))
+        @ArraySchema(arraySchema = @Schema(description = "Módulos liberados: '*' (todos) ou 'dashboard', 'produtos', "
+                + "'demandas', 'financeiro', 'usuarios'",
+                example = "[\"dashboard\", \"produtos\", \"demandas\"]"))
         List<String> acessos,
-        @Schema(description = "Data de criação da conta; ausente na resposta do login", nullable = true) Instant criadoEm
+        @Schema(description = "Data de criação da conta; ausente na resposta do login", nullable = true) Instant criadoEm,
+        @Schema(description = "URL pública do avatar; ausente na resposta do login", nullable = true) String avatarUrl
 ) {
 
     public static UsuarioDTO from(Perfil perfil) {
         Instant criadoEm = perfil.criadoEm() == null ? null : perfil.criadoEm().toInstant();
         return new UsuarioDTO(perfil.id(), perfil.nome(), perfil.email(), perfil.papel(),
-                Acessos.de(perfil.acessos(), perfil.papel()), criadoEm);
+                Acessos.de(perfil.acessos(), perfil.papel()), criadoEm, perfil.avatarUrl());
     }
 }

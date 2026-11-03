@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.config.SecurityConfig;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.exception.EmailJaCadastradoException;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.model.Papel;
@@ -45,7 +46,7 @@ class UsuarioControllerTest {
     private static final UUID ADMIN = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OUTRO = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UsuarioDTO USUARIO = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
-            List.of("dashboard", "produtos"), Instant.parse("2026-11-03T08:00:00Z"));
+            List.of("dashboard", "produtos"), Instant.parse("2026-11-03T08:00:00Z"), null);
     private static final String EDICAO = """
             {"nome": "Maria", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"]}
             """;
@@ -68,14 +69,24 @@ class UsuarioControllerTest {
     }
 
     @Test
-    @DisplayName("GET /me deve devolver o usuário do token, para qualquer papel")
-    void deveDevolverUsuarioLogado() throws Exception {
-        when(usuarioService.buscar(OUTRO)).thenReturn(USUARIO);
+    @DisplayName("GET /opcoes deve liberar quem tem o módulo de demandas, mesmo sem ser ADMIN")
+    void deveListarOpcoesParaQuemTemDemandas() throws Exception {
+        when(usuarioService.opcoes()).thenReturn(List.of(new UsuarioOpcaoDTO(OUTRO, "Maria", null)));
 
-        mockMvc.perform(get(URL + "/me").with(comoUsuario()))
+        mockMvc.perform(get(URL + "/opcoes").with(jwt().jwt(token -> token.subject(OUTRO.toString()))
+                        .authorities(new SimpleGrantedAuthority("ROLE_USUARIO"), new SimpleGrantedAuthority("MODULO_DEMANDAS"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("maria@exemplo.com"))
-                .andExpect(jsonPath("$.papel").value("USUARIO"));
+                .andExpect(jsonPath("$[0].nome").value("Maria"))
+                .andExpect(jsonPath("$[0].email").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /opcoes deve responder 403 sem o módulo de demandas")
+    void deveBloquearOpcoesSemDemandas() throws Exception {
+        mockMvc.perform(get(URL + "/opcoes").with(comoUsuario()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(usuarioService);
     }
 
     @Test
@@ -115,7 +126,7 @@ class UsuarioControllerTest {
         AtualizarUsuarioRequestDTO pedido = new AtualizarUsuarioRequestDTO(
                 "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"));
         UsuarioDTO atualizado = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
-                List.of("dashboard"), null);
+                List.of("dashboard"), null, null);
         when(usuarioService.atualizar(OUTRO, pedido, ADMIN)).thenReturn(atualizado);
 
         mockMvc.perform(put(URL + "/" + OUTRO).with(comoAdmin())

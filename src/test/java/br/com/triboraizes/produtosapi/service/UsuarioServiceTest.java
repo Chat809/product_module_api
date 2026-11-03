@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dao.PerfilDAO;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
@@ -173,6 +174,15 @@ class UsuarioServiceTest {
         assertThatThrownBy(() -> usuarioService.atualizar(OUTRO,
                 pedido("Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*")), ADMIN))
                 .isInstanceOf(UsuarioNaoEncontradoException.class);
+    }
+
+    @Test
+    @DisplayName("Opções de responsável expõem só id, nome e avatar")
+    void deveListarOpcoes() {
+        when(perfilDAO.listarOpcoes()).thenReturn(List.of(
+                new Perfil(OUTRO, "Maria", null, null, null, null, null, null, null, "https://x/a.png")));
+
+        assertThat(usuarioService.opcoes()).containsExactly(new UsuarioOpcaoDTO(OUTRO, "Maria", "https://x/a.png"));
     }
 
     @Test

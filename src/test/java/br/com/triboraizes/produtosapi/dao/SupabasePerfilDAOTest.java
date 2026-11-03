@@ -34,6 +34,7 @@ class SupabasePerfilDAOTest {
 
     private static final String URL = "https://projeto.supabase.co";
     private static final String TABELA = URL + "/rest/v1/perfis";
+    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em,telefone,funcao,bio,avatar_url";
     private static final UUID ID = UUID.fromString("6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e");
     private static final String PERFIL_JSON = """
             [{"id": "6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e", "nome": "Maria", "email": "maria@exemplo.com",
@@ -54,7 +55,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve buscar o perfil por id e converter o timestamp do Postgres")
     void deveBuscarPorId() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&id=eq." + ID))
+        servidor.expect(requestTo(TABELA + "?select=" + COLUNAS + "&id=eq." + ID))
                 .andExpect(method(GET))
                 .andExpect(header("apikey", "sb_secret_teste"))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
@@ -70,7 +71,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve devolver vazio quando o id não existir")
     void deveDevolverVazio() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&id=eq." + ID))
+        servidor.expect(requestTo(TABELA + "?select=" + COLUNAS + "&id=eq." + ID))
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
         assertThat(dao.buscarPorId(ID)).isEmpty();
@@ -79,7 +80,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve listar a página pedida em ordem alfabética")
     void deveListar() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&order=nome.asc&offset=20&limit=10"))
+        servidor.expect(requestTo(TABELA + "?select=" + COLUNAS + "&order=nome.asc&offset=20&limit=10"))
                 .andExpect(method(GET))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
 
@@ -107,7 +108,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve gravar nome, e-mail, papel e acessos (como array JSON) e devolver o perfil gravado")
     void deveAtualizar() {
-        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=id,nome,email,papel,acessos,criado_em"))
+        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS + ""))
                 .andExpect(method(PATCH))
                 .andExpect(header("Prefer", "return=representation"))
                 .andExpect(content().json("""
@@ -117,6 +118,45 @@ class SupabasePerfilDAOTest {
 
         assertThat(dao.atualizar(ID, "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*")))
                 .get().extracting(Perfil::papel).isEqualTo(Papel.ADMIN);
+    }
+
+    @Test
+    @DisplayName("Deve gravar os dados próprios, enviando null nos campos vazios")
+    void deveAtualizarDadosProprios() {
+        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS))
+                .andExpect(method(PATCH))
+                .andExpect(content().json("""
+                        {"nome": "Maria", "telefone": null, "funcao": "Compras", "bio": null}
+                        """, JsonCompareMode.STRICT))
+                .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
+
+        assertThat(dao.atualizarDadosProprios(ID, "Maria", null, "Compras", null)).isPresent();
+    }
+
+    @Test
+    @DisplayName("Deve gravar e limpar o avatar")
+    void deveAtualizarAvatar() {
+        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS))
+                .andExpect(content().json("{\"avatar_url\": \"https://x/a.png\"}", JsonCompareMode.STRICT))
+                .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
+        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS))
+                .andExpect(content().json("{\"avatar_url\": null}", JsonCompareMode.STRICT))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(dao.atualizarAvatar(ID, "https://x/a.png")).isPresent();
+        assertThat(dao.atualizarAvatar(ID, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Opções de responsável trazem só id, nome e avatar")
+    void deveListarOpcoes() {
+        servidor.expect(requestTo(TABELA + "?select=id,nome,avatar_url&order=nome.asc&limit=1000"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        [{"id": "6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e", "nome": "Maria", "avatar_url": "https://x/a.png"}]
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(dao.listarOpcoes()).extracting(Perfil::avatarUrl).containsExactly("https://x/a.png");
     }
 
     @Test

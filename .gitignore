@@ -33,3 +33,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Segredos e configuração local ###
+.env
+.env.*
+.cursor/
+*.zip

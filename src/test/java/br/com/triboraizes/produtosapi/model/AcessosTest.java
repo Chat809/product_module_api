@@ -20,8 +20,8 @@ class AcessosTest {
     @Test
     @DisplayName("Deve remover duplicados e ordenar os módulos pela ordem do menu")
     void deveNormalizarLista() {
-        assertThat(Acessos.normalizar(Papel.USUARIO, List.of("produtos", "dashboard", "produtos")))
-                .containsExactly("dashboard", "produtos");
+        assertThat(Acessos.normalizar(Papel.USUARIO, List.of("financeiro", "produtos", "dashboard", "produtos", "demandas")))
+                .containsExactly("dashboard", "produtos", "demandas", "financeiro");
         assertThat(Acessos.normalizar(Papel.USUARIO, List.of())).isEmpty();
     }
 
@@ -34,9 +34,9 @@ class AcessosTest {
     @Test
     @DisplayName("Deve recusar acesso desconhecido e o módulo de usuários para USUARIO")
     void deveRecusarAcessosInvalidos() {
-        assertThatThrownBy(() -> Acessos.normalizar(Papel.USUARIO, List.of("financeiro")))
+        assertThatThrownBy(() -> Acessos.normalizar(Papel.USUARIO, List.of("relatorios")))
                 .isInstanceOf(RequisicaoInvalidaException.class)
-                .hasMessageContaining("financeiro");
+                .hasMessageContaining("relatorios");
         assertThatThrownBy(() -> Acessos.normalizar(Papel.USUARIO, List.of("usuarios")))
                 .isInstanceOf(RequisicaoInvalidaException.class)
                 .hasMessageContaining("exclusivo de administradores");
@@ -46,7 +46,7 @@ class AcessosTest {
     @DisplayName("Deve ler os acessos do token, com padrão quando ausentes")
     void deveLerDoToken() {
         assertThat(Acessos.de(List.of("dashboard"), Papel.USUARIO)).containsExactly("dashboard");
-        assertThat(Acessos.de(null, Papel.USUARIO)).containsExactly("dashboard", "produtos");
+        assertThat(Acessos.de(null, Papel.USUARIO)).containsExactly("dashboard", "produtos", "demandas");
         assertThat(Acessos.de(List.of("dashboard"), Papel.ADMIN)).containsExactly("*");
     }
 }

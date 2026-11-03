@@ -81,6 +81,11 @@ public class SupabaseAuthClient {
         atualizar(id, Map.of("email", email, "email_confirm", true, "user_metadata", Map.of("nome", nome)), email);
     }
 
+    /** Usado em "Meu perfil": muda só o nome, sem tocar no e-mail de login. */
+    public void atualizarNome(UUID id, String nome) {
+        atualizar(id, Map.of("user_metadata", Map.of("nome", nome)), null);
+    }
+
     public void redefinirSenha(UUID id, String senha) {
         atualizar(id, Map.of("password", senha), null);
     }
@@ -170,7 +175,7 @@ public class SupabaseAuthClient {
     }
 
     private static ServicoDeUsuariosIndisponivelException indisponivel(RestClientException ex) {
-        log.error("Falha ao chamar o Supabase Auth", ex);
+        log.error("Falha ao chamar o Supabase Auth: {}", FalhaDoSupabase.descrever(ex));
         return new ServicoDeUsuariosIndisponivelException("Serviço de usuários indisponível. Tente novamente.", ex);
     }
 }

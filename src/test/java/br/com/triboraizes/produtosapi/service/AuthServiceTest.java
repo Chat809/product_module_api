@@ -110,6 +110,6 @@ class AuthServiceTest {
 
         assertThat(sessao.usuario().nome()).isEqualTo("maria@exemplo.com");
         assertThat(sessao.usuario().papel()).isEqualTo(Papel.USUARIO);
-        assertThat(sessao.usuario().acessos()).containsExactly("dashboard", "produtos");
+        assertThat(sessao.usuario().acessos()).containsExactly("dashboard", "produtos", "demandas");
     }
 }

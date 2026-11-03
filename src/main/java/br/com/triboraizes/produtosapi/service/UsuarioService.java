@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dao.PerfilDAO;
 import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
@@ -44,6 +45,10 @@ public class UsuarioService {
                     "Use 'page' a partir de 0 e 'size' entre 1 e " + TAMANHO_MAXIMO_PAGINA);
         }
         return PaginaDTO.of(perfilDAO.listar(pagina, tamanho), UsuarioDTO::from, pagina, tamanho, perfilDAO.contar());
+    }
+
+    public List<UsuarioOpcaoDTO> opcoes() {
+        return perfilDAO.listarOpcoes().stream().map(UsuarioOpcaoDTO::from).toList();
     }
 
     /**

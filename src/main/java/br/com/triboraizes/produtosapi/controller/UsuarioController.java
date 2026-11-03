@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.RedefinirSenhaRequestDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.dto.UsuarioOpcaoDTO;
 import br.com.triboraizes.produtosapi.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ACESSO_INVALIDO;
@@ -39,7 +41,7 @@ import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.USUARIO_N
 
 @RestController
 @RequestMapping("/api/v1/usuarios")
-@Tag(name = "Usuários", description = "Dados do usuário logado e gestão de usuários, papéis e acessos (administradores)")
+@Tag(name = "Usuários", description = "Gestão de usuários, papéis e acessos (administradores)")
 @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
         content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                 examples = @ExampleObject(value = NAO_AUTENTICADO)))
@@ -51,11 +53,15 @@ public class UsuarioController {
         this.usuarioService = usuarioService;
     }
 
-    @GetMapping("/me")
-    @Operation(summary = "Devolve o usuário logado, com o papel atual gravado no banco")
-    @ApiResponse(responseCode = "200", description = "Usuário logado")
-    public UsuarioDTO me(@AuthenticationPrincipal Jwt jwt) {
-        return usuarioService.buscar(UUID.fromString(jwt.getSubject()));
+    @GetMapping("/opcoes")
+    @Operation(summary = "Lista id, nome e avatar de todos os usuários, para escolher responsáveis de demandas",
+            description = "Liberado a quem tem o módulo 'demandas'. Não devolve e-mail nem telefone.")
+    @ApiResponse(responseCode = "200", description = "Usuários em ordem alfabética")
+    @ApiResponse(responseCode = "403", description = "Usuário sem o módulo de demandas",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_NEGADO)))
+    public List<UsuarioOpcaoDTO> opcoes() {
+        return usuarioService.opcoes();
     }
 
     @GetMapping

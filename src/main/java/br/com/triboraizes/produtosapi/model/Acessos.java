@@ -16,7 +16,8 @@ public final class Acessos {
     public static final String TOTAL = "*";
     public static final List<String> ACESSO_TOTAL = List.of(TOTAL);
     /** O mesmo default da coluna no banco, aplicado a toda conta nova. */
-    public static final List<String> PADRAO = List.of(Modulo.DASHBOARD.chave(), Modulo.PRODUTOS.chave());
+    public static final List<String> PADRAO =
+            List.of(Modulo.DASHBOARD.chave(), Modulo.PRODUTOS.chave(), Modulo.DEMANDAS.chave());
 
     private Acessos() {
     }
@@ -61,7 +62,7 @@ public final class Acessos {
                 return ACESSO_TOTAL;
             }
             Modulo modulo = Modulo.de(chave).orElseThrow(() -> new RequisicaoInvalidaException(
-                    "Acesso desconhecido: '" + chave + "'. Use '*', 'dashboard' ou 'produtos'"));
+                    "Acesso desconhecido: '" + chave + "'. Use '*', 'dashboard', 'produtos', 'demandas' ou 'financeiro'"));
             if (modulo == Modulo.USUARIOS) {
                 throw new RequisicaoInvalidaException("O módulo 'usuarios' é exclusivo de administradores");
             }
