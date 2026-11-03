@@ -21,6 +21,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -39,7 +40,7 @@ class AuthControllerTest {
 
     private static final SessaoDTO SESSAO = new SessaoDTO("acesso", "renovacao", Instant.parse("2026-11-03T13:00:00Z"),
             new UsuarioDTO(UUID.fromString("6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e"), "Maria", "maria@exemplo.com",
-                    Papel.USUARIO, null));
+                    Papel.USUARIO, List.of("dashboard", "produtos"), null));
 
     @Autowired
     private MockMvc mockMvc;

@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ProdutoController.class)
 @Import(SecurityConfig.class)
-@WithMockUser
+@WithMockUser(authorities = {"MODULO_DASHBOARD", "MODULO_PRODUTOS"})
 class ProdutoControllerTest {
 
     @MockitoBean
@@ -352,6 +352,38 @@ class ProdutoControllerTest {
                         .header("Origin", "https://site-desconhecido.com")
                         .header("Access-Control-Request-Method", "POST"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "MODULO_DASHBOARD")
+    @DisplayName("Só com o dashboard: lê catálogo e resumo, mas não altera produtos")
+    void dashboardDeveSerSomenteLeitura() throws Exception {
+        when(produtoService.listar(null, 0, 20, "nome,asc")).thenReturn(new PaginaDTO<>(List.of(), 0, 20, 0, 0));
+        when(produtoService.resumo()).thenReturn(new ResumoEstoqueDTO(0, 0, BigDecimal.ZERO, 0, 0, 5));
+
+        mockMvc.perform(get(URL)).andExpect(status().isOk());
+        mockMvc.perform(get(URL + "/resumo")).andExpect(status().isOk());
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Acesso negado"));
+        mockMvc.perform(delete(URL + "/" + ID)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "MODULO_PRODUTOS")
+    @DisplayName("Só com produtos: gerencia o catálogo, mas não vê o resumo do dashboard")
+    void produtosSemDashboardNaoVeResumo() throws Exception {
+        mockMvc.perform(get(URL + "/resumo")).andExpect(status().isForbidden());
+        verifyNoInteractions(produtoService);
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_USUARIO")
+    @DisplayName("Sem nenhum módulo liberado, toda rota de produtos responde 403")
+    void semModulosDeveSerBloqueado() throws Exception {
+        mockMvc.perform(get(URL)).andExpect(status().isForbidden());
+        mockMvc.perform(get(URL + "/" + ID)).andExpect(status().isForbidden());
+        verifyNoInteractions(produtoService);
     }
 
     @Test

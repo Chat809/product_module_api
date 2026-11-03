@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(MovimentacaoController.class)
 @Import(SecurityConfig.class)
-@WithMockUser
+@WithMockUser(authorities = "MODULO_PRODUTOS")
 class MovimentacaoControllerTest {
 
     @MockitoBean

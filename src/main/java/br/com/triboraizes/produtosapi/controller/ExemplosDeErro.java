@@ -61,7 +61,7 @@ final class ExemplosDeErro {
             {
               "title": "Acesso negado",
               "status": 403,
-              "detail": "Esta operação é restrita a administradores",
+              "detail": "Seu usuário não tem permissão para esta operação. Peça a um administrador para liberar o acesso.",
               "instance": "/api/v1/usuarios"
             }""";
 
@@ -86,7 +86,7 @@ final class ExemplosDeErro {
               "title": "Usuário não encontrado",
               "status": 404,
               "detail": "Usuário com id 6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e não encontrado",
-              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e/papel"
+              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e"
             }""";
 
     static final String OPERACAO_NAO_PERMITIDA = """
@@ -94,7 +94,15 @@ final class ExemplosDeErro {
               "title": "Operação não permitida",
               "status": 422,
               "detail": "Você não pode remover o seu próprio acesso de administrador",
-              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e/papel"
+              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e"
+            }""";
+
+    static final String ACESSO_INVALIDO = """
+            {
+              "title": "Parâmetro inválido",
+              "status": 400,
+              "detail": "O módulo 'usuarios' é exclusivo de administradores",
+              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e"
             }""";
 
     static final String SERVICO_INDISPONIVEL = """

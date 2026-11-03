@@ -1,8 +1,10 @@
 package br.com.triboraizes.produtosapi.controller;
 
 import br.com.triboraizes.produtosapi.config.SecurityConfig;
+import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.exception.EmailJaCadastradoException;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.model.Papel;
 import br.com.triboraizes.produtosapi.service.UsuarioService;
@@ -23,11 +25,14 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,7 +45,10 @@ class UsuarioControllerTest {
     private static final UUID ADMIN = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OUTRO = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UsuarioDTO USUARIO = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
-            Instant.parse("2026-11-03T08:00:00Z"));
+            List.of("dashboard", "produtos"), Instant.parse("2026-11-03T08:00:00Z"));
+    private static final String EDICAO = """
+            {"nome": "Maria", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"]}
+            """;
 
     @Autowired
     private MockMvc mockMvc;
@@ -102,37 +110,75 @@ class UsuarioControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /{id}/papel deve repassar o id do admin logado")
-    void deveAlterarPapel() throws Exception {
-        UsuarioDTO promovido = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.ADMIN, null);
-        when(usuarioService.alterarPapel(OUTRO, Papel.ADMIN, ADMIN)).thenReturn(promovido);
+    @DisplayName("PUT /{id} deve repassar os dados e o id do admin logado")
+    void deveAtualizar() throws Exception {
+        AtualizarUsuarioRequestDTO pedido = new AtualizarUsuarioRequestDTO(
+                "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"));
+        UsuarioDTO atualizado = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
+                List.of("dashboard"), null);
+        when(usuarioService.atualizar(OUTRO, pedido, ADMIN)).thenReturn(atualizado);
 
-        mockMvc.perform(patch(URL + "/" + OUTRO + "/papel").with(comoAdmin())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"papel\": \"ADMIN\"}"))
+        mockMvc.perform(put(URL + "/" + OUTRO).with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content(EDICAO))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.papel").value("ADMIN"));
+                .andExpect(jsonPath("$.acessos[0]").value("dashboard"));
     }
 
     @Test
-    @DisplayName("PATCH /{id}/papel deve responder 422 quando o admin tentar se rebaixar")
+    @DisplayName("PUT /{id} deve responder 422 quando o admin tentar se rebaixar")
     void deveRecusarAutoRebaixamento() throws Exception {
-        when(usuarioService.alterarPapel(ADMIN, Papel.USUARIO, ADMIN))
+        when(usuarioService.atualizar(eq(ADMIN), any(), eq(ADMIN)))
                 .thenThrow(new OperacaoNaoPermitidaException("Você não pode remover o seu próprio acesso de administrador"));
 
-        mockMvc.perform(patch(URL + "/" + ADMIN + "/papel").with(comoAdmin())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"papel\": \"USUARIO\"}"))
+        mockMvc.perform(put(URL + "/" + ADMIN).with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content(EDICAO))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.title").value("Operação não permitida"));
     }
 
     @Test
-    @DisplayName("PATCH /{id}/papel deve validar o corpo e bloquear quem não é ADMIN")
-    void deveValidarAlteracaoDePapel() throws Exception {
-        mockMvc.perform(patch(URL + "/" + OUTRO + "/papel").with(comoAdmin())
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+    @DisplayName("PUT /{id} deve responder 409 quando o novo e-mail já for de outra conta")
+    void deveRecusarEmailDeOutraConta() throws Exception {
+        when(usuarioService.atualizar(eq(OUTRO), any(), eq(ADMIN)))
+                .thenThrow(new EmailJaCadastradoException("maria@exemplo.com"));
+
+        mockMvc.perform(put(URL + "/" + OUTRO).with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content(EDICAO))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("PUT /{id} deve validar o corpo e bloquear quem não é ADMIN")
+    void deveValidarEdicao() throws Exception {
+        mockMvc.perform(put(URL + "/" + OUTRO).with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\": \"\", \"email\": \"x\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros", hasSize(4)));
+        mockMvc.perform(put(URL + "/" + OUTRO).with(comoUsuario())
+                        .contentType(MediaType.APPLICATION_JSON).content(EDICAO))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(usuarioService);
+    }
+
+    @Test
+    @DisplayName("PUT /{id}/senha deve redefinir a senha e responder 204")
+    void deveRedefinirSenha() throws Exception {
+        mockMvc.perform(put(URL + "/" + OUTRO + "/senha").with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"senha\": \"novaSenha1\"}"))
+                .andExpect(status().isNoContent());
+
+        verify(usuarioService).redefinirSenha(OUTRO, "novaSenha1", ADMIN);
+    }
+
+    @Test
+    @DisplayName("PUT /{id}/senha deve validar o tamanho e bloquear quem não é ADMIN")
+    void deveValidarSenha() throws Exception {
+        mockMvc.perform(put(URL + "/" + OUTRO + "/senha").with(comoAdmin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"senha\": \"123\"}"))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(patch(URL + "/" + OUTRO + "/papel").with(comoUsuario())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"papel\": \"ADMIN\"}"))
+        mockMvc.perform(put(URL + "/" + OUTRO + "/senha").with(comoUsuario())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"senha\": \"novaSenha1\"}"))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(usuarioService);

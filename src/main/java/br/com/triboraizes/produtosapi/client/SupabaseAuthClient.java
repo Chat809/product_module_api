@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.exception.CredenciaisInvalidasException;
 import br.com.triboraizes.produtosapi.exception.EmailJaCadastradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.ServicoDeUsuariosIndisponivelException;
+import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
@@ -69,17 +70,49 @@ public class SupabaseAuthClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (HttpClientErrorException ex) {
-            ErroAuth erro = lerErro(ex);
-            if ("email_exists".equals(erro.codigo()) || "user_already_exists".equals(erro.codigo())) {
-                throw new EmailJaCadastradoException(email);
-            }
-            if ("weak_password".equals(erro.codigo()) || "validation_failed".equals(erro.codigo())) {
-                throw new RequisicaoInvalidaException("Dados recusados pelo serviço de usuários: " + erro.msg());
-            }
-            throw indisponivel(ex);
+            throw traduzir(ex, email);
         } catch (RestClientException ex) {
             throw indisponivel(ex);
         }
+    }
+
+    /** Altera nome e e-mail no Auth; o novo e-mail já fica confirmado, sem mensagem de verificação. */
+    public void atualizarDados(UUID id, String nome, String email) {
+        atualizar(id, Map.of("email", email, "email_confirm", true, "user_metadata", Map.of("nome", nome)), email);
+    }
+
+    public void redefinirSenha(UUID id, String senha) {
+        atualizar(id, Map.of("password", senha), null);
+    }
+
+    private void atualizar(UUID id, Map<String, Object> corpo, String email) {
+        exigirConfiguracao();
+        try {
+            restClient.put()
+                    .uri("/auth/v1/admin/users/{id}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                throw new UsuarioNaoEncontradoException(id);
+            }
+            throw traduzir(ex, email);
+        } catch (RestClientException ex) {
+            throw indisponivel(ex);
+        }
+    }
+
+    private static RuntimeException traduzir(HttpClientErrorException ex, String email) {
+        ErroAuth erro = lerErro(ex);
+        if ("email_exists".equals(erro.codigo()) || "user_already_exists".equals(erro.codigo())) {
+            return new EmailJaCadastradoException(email);
+        }
+        if ("weak_password".equals(erro.codigo()) || "validation_failed".equals(erro.codigo())) {
+            return new RequisicaoInvalidaException("Dados recusados pelo serviço de usuários: " + erro.msg());
+        }
+        return indisponivel(ex);
     }
 
     public SessaoAuth entrar(String email, String senha) {

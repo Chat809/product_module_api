@@ -6,7 +6,7 @@
 ![Testes](https://img.shields.io/badge/testes-128%20passando-success)
 ![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-99%25-success)
 
-API REST para gerenciamento de produtos e do seu estoque, desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java. Além do CRUD pedido, oferece paginação com busca e ordenação, movimentações de estoque com histórico, indicadores para dashboard, controle de edições concorrentes com `ETag` e login com papéis (usuários guardados no Supabase).
+API REST para gerenciamento de produtos e do seu estoque, desenvolvida como teste técnico para a vaga de Desenvolvedor Backend Java. Além do CRUD pedido, oferece paginação com busca e ordenação, movimentações de estoque com histórico, indicadores para dashboard, controle de edições concorrentes com `ETag` e login com papéis e acessos por módulo (usuários guardados no Supabase).
 
 ## Links rápidos
 
@@ -46,7 +46,8 @@ API REST para gerenciamento de produtos e do seu estoque, desenvolvida como test
 - **Movimentações de estoque:** entradas e saídas com motivo e histórico. Uma saída maior que o estoque é recusada com 422. A criação registra o estoque inicial, e uma edição que muda a quantidade gera um `AJUSTE` automático, mantendo o histórico consistente.
 - **Resumo do estoque** para dashboards: total de produtos e de itens, valor em estoque, esgotados e estoque baixo.
 - **Dados iniciais:** a aplicação sobe com 15 produtos de exemplo (desligável com `DADOS_INICIAIS=false`).
-- **Login, registro e papéis:** os usuários ficam no Supabase Auth, e a API valida o JWT de cada requisição. Qualquer usuário logado gerencia produtos e estoque; administradores também listam usuários e alteram papéis. Veja [Autenticação](#autenticação).
+- **Login, registro e papéis:** os usuários ficam no Supabase Auth, e a API valida o JWT de cada requisição. Veja [Autenticação](#autenticação).
+- **Acessos por módulo:** cada perfil tem uma coluna `acessos` (jsonb) que libera `dashboard`, `produtos` ou tudo (`["*"]`). A API recusa com 403 o que não foi liberado, e administradores editam nome, e-mail, cargo, acessos e senha de qualquer usuário. Veja [Acessos por módulo](#acessos-por-módulo).
 - **Swagger documentado:** cada endpoint descreve suas respostas de sucesso e de erro, com exemplos reais, e o botão **Authorize** aceita o token do login.
 - **CI** com GitHub Actions: build, testes e cobertura mínima de 80% a cada push.
 
@@ -56,7 +57,7 @@ API REST para gerenciamento de produtos e do seu estoque, desenvolvida como test
 - Spring Boot 4.1.2 (Spring Web MVC, Spring Data JPA, Bean Validation, Actuator)
 - Spring Security como OAuth2 Resource Server (validação de JWT)
 - H2 Database (em memória) para produtos e movimentações
-- Supabase (Auth e Postgres) para usuários e papéis
+- Supabase (Auth e Postgres) para usuários, papéis e acessos
 - springdoc-openapi (Swagger UI)
 - JUnit 5, Mockito, AssertJ e JaCoCo
 - Maven (via Maven Wrapper)
@@ -114,7 +115,7 @@ Para rodar o painel junto, siga o README do [repositório do painel](https://git
 ./mvnw clean verify         # Linux/macOS
 ```
 
-O comando executa os 128 testes, gera o relatório de cobertura em `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje está em 99%). Nenhum teste acessa o Supabase de verdade: as chamadas HTTP são simuladas com `MockRestServiceServer`.
+O comando executa os 151 testes, gera o relatório de cobertura em `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje está em 99%). Nenhum teste acessa o Supabase de verdade: as chamadas HTTP são simuladas com `MockRestServiceServer`.
 
 | Classe de teste | Tipo | O que cobre |
 |---|---|---|
@@ -122,14 +123,15 @@ O comando executa os 128 testes, gera o relatório de cobertura em `target/site/
 | `ProdutoServiceTest` | Unitário (Mockito) | CRUD, paginação, validação dos parâmetros, conflito de versão, estoque inicial, ajuste automático e resumo |
 | `MovimentacaoServiceTest` | Unitário (Mockito) | Entrada, saída, estoque insuficiente, ajuste manual recusado e histórico |
 | `GlobalExceptionHandlerTest` | Unitário da camada web (MockMvc standalone) | Formato RFC 9457 de cada erro: 400, 404, 409, 422 e 500 sem vazar detalhes internos |
-| `ProdutoControllerTest` | Camada web (`@WebMvcTest`) | Status HTTP, `Location`, `ETag` e `If-Match`, validação, paginação, resumo, CORS e 401 sem token |
+| `ProdutoControllerTest` | Camada web (`@WebMvcTest`) | Status HTTP, `Location`, `ETag` e `If-Match`, validação, paginação, resumo, CORS, 401 sem token e 403 por módulo (dashboard só lê, sem módulo nada passa) |
 | `MovimentacaoControllerTest` | Camada web (`@WebMvcTest`) | 201, 400, 422 e histórico paginado |
 | `AuthControllerTest` | Camada web (`@WebMvcTest`) | Registro, login e refresh sem token; 400, 401, 409 e 503 |
-| `UsuarioControllerTest` | Camada web (`@WebMvcTest`) com JWT simulado | `/me` para qualquer papel, 403 para não-admin, listagem e troca de papel pelo admin |
-| `AuthServiceTest` e `UsuarioServiceTest` | Unitário (Mockito) | Normalização do e-mail, montagem da sessão, paginação e bloqueio do admin rebaixar a si mesmo |
-| `SupabaseAuthClientTest` | Unitário com `MockRestServiceServer` | Corpo e cabeçalhos enviados ao Supabase Auth e tradução de cada erro (e-mail repetido, senha fraca, credenciais, indisponibilidade) |
-| `SupabasePerfilDAOTest` | Unitário com `MockRestServiceServer` | Consultas ao PostgREST, contagem pelo `Content-Range` e atualização do papel |
-| `PapelDoTokenConverterTest` | Unitário puro | Leitura do papel no `app_metadata` do JWT |
+| `UsuarioControllerTest` | Camada web (`@WebMvcTest`) com JWT simulado | `/me` para qualquer papel, 403 para não-admin, listagem, edição (400, 409, 422) e nova senha (204) |
+| `AuthServiceTest` e `UsuarioServiceTest` | Unitário (Mockito) | Normalização do e-mail, sessão com papel e acessos, edição que só chama o Supabase Auth quando nome ou e-mail mudam, e bloqueio do admin rebaixar a si mesmo |
+| `SupabaseAuthClientTest` | Unitário com `MockRestServiceServer` | Corpo e cabeçalhos enviados ao Supabase Auth (criação, edição, nova senha) e tradução de cada erro (e-mail repetido, senha fraca, id inexistente, credenciais, indisponibilidade) |
+| `SupabasePerfilDAOTest` | Unitário com `MockRestServiceServer` | Consultas ao PostgREST, contagem pelo `Content-Range` e gravação de papel e acessos como array JSON |
+| `PermissoesDoTokenConverterTest` | Unitário puro | Conversão de papel e acessos do `app_metadata` em `ROLE_*` e `MODULO_*`, inclusive tokens antigos sem acessos |
+| `AcessosTest` | Unitário puro | Regras da coluna `acessos`: `*`, ordem canônica, módulo desconhecido e `usuarios` exclusivo de admin |
 | `JpaProdutoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, auditoria, versão, paginação, busca e consultas agregadas |
 | `JpaMovimentacaoDAOTest` | Integração com H2 (`@DataJpaTest`) | Persistência, histórico por produto e remoção |
 | `ProdutosApiApplicationTests` | Contexto | Inicialização da aplicação com os dados iniciais |
@@ -140,7 +142,7 @@ Os testes unitários isolam uma peça por vez: a entidade é testada com `new Pr
 
 A documentação completa, com exemplos de requisição e de cada erro, está no [Swagger UI](https://product-module-api.onrender.com/swagger-ui.html).
 
-Com exceção de `/api/v1/auth/**`, do Swagger e do health check, todas as rotas exigem o cabeçalho `Authorization: Bearer <accessToken>`. Sem ele, a resposta é 401.
+Com exceção de `/api/v1/auth/**`, do Swagger e do health check, todas as rotas exigem o cabeçalho `Authorization: Bearer <accessToken>`. Sem ele, a resposta é 401. Com ele, mas sem o módulo ou o papel exigido pela rota, a resposta é 403 (veja [Acessos por módulo](#acessos-por-módulo)).
 
 ### Autenticação
 
@@ -163,25 +165,103 @@ Resposta do login e do registro:
   "accessToken": "eyJhbGciOiJFUzI1NiIs...",
   "refreshToken": "v1.MjQ0...",
   "expiraEm": "2026-11-03T13:00:00Z",
-  "usuario": { "id": "6f1c2b0e-...", "nome": "Maria Souza", "email": "maria@exemplo.com", "papel": "USUARIO" }
+  "usuario": {
+    "id": "6f1c2b0e-...", "nome": "Maria Souza", "email": "maria@exemplo.com",
+    "papel": "USUARIO", "acessos": ["dashboard", "produtos"]
+  }
 }
 ```
 
 Como funciona por dentro:
 
 - O `accessToken` é um JWT assinado pelo Supabase com **ES256**. A API valida assinatura (chaves públicas do JWKS do projeto), emissor, audiência `authenticated` e expiração, sem consultar o Supabase a cada requisição.
-- O papel fica na tabela `public.perfis` do Supabase. Um trigger copia o papel para o `app_metadata` do usuário, que vai dentro do JWT e que o próprio usuário não consegue alterar. A API converte esse valor em `ROLE_ADMIN` ou `ROLE_USUARIO`.
+- O papel e os acessos ficam na tabela `public.perfis` do Supabase. Um trigger copia os dois para o `app_metadata` do usuário, que vai dentro do JWT e que o próprio usuário não consegue alterar. A API converte esses valores em `ROLE_ADMIN` ou `ROLE_USUARIO` e em um `MODULO_*` para cada módulo liberado.
 - Novas contas são criadas pela API de administração do Supabase já com o e-mail confirmado, para que a pessoa entre logo depois do registro.
 
 ### Usuários (`/api/v1/usuarios`)
 
 | Método | Rota | Quem pode | Descrição | Sucesso | Erros |
 |---|---|---|---|---|---|
-| `GET` | `/me` | Qualquer usuário logado | Dados do usuário logado, com o papel atual | 200 | 401 |
-| `GET` | `/` | `ADMIN` | Lista os usuários em ordem alfabética (`page`, `size` de 1 a 100) | 200 | 400, 401, 403 |
-| `PATCH` | `/{id}/papel` | `ADMIN` | Altera o papel (`{"papel": "ADMIN"}` ou `"USUARIO"`) | 200 | 400, 401, 403, 404, 422 |
+| `GET` | `/me` | Qualquer usuário logado | Dados do usuário logado, com papel e acessos atuais | 200 | 401 |
+| `GET` | `/` | `ADMIN` | Lista os usuários em ordem alfabética, com papel e acessos (`page`, `size` de 1 a 100) | 200 | 400, 401, 403 |
+| `PUT` | `/{id}` | `ADMIN` | Edita nome, e-mail, papel (cargo) e acessos | 200 | 400, 401, 403, 404, 409, 422 |
+| `PUT` | `/{id}/senha` | `ADMIN` | Define uma nova senha (`{"senha": "..."}`, de 6 a 72 caracteres) | 204 | 400, 401, 403, 404 |
 
-Um administrador não pode remover o próprio acesso (422), o que garante que sempre reste ao menos um. A troca de papel vale para o usuário afetado no próximo login ou renovação de sessão.
+Corpo do `PUT /{id}`:
+
+```json
+{ "nome": "Maria Souza", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"] }
+```
+
+- Um administrador não pode remover o próprio acesso de administrador (422), o que garante que sempre reste ao menos um.
+- Nome e e-mail ficam no Supabase Auth (é com o e-mail que se entra) e só são enviados a ele quando mudam. Um e-mail que já pertence a outra conta responde 409. O novo e-mail já fica confirmado.
+- **Senhas não podem ser consultadas**, nem por administradores: o Supabase guarda apenas o hash (bcrypt). Por isso existe "definir nova senha", e não "ver senha".
+- Papel e acessos novos valem para o usuário afetado no próximo login ou renovação de sessão (em até 1 hora).
+
+### Acessos por módulo
+
+Além do papel, cada usuário tem uma lista de **acessos** que define quais módulos do painel ele pode usar. Ela fica na coluna `acessos` (jsonb) da tabela `public.perfis` do Supabase.
+
+**Valores aceitos**
+
+| Valor | Significado |
+|---|---|
+| `["*"]` | Acesso total: todos os módulos permitidos ao papel |
+| `["dashboard", "produtos"]` | Apenas os módulos listados (padrão de toda conta nova) |
+| `["dashboard"]` | Só o dashboard |
+| `[]` | Nenhum módulo: a pessoa entra, mas o painel mostra "Nenhum módulo liberado" |
+
+Módulos existentes: `dashboard`, `produtos` e `usuarios`.
+
+**Regras**
+
+- `ADMIN` tem sempre `["*"]`. Isso é garantido em três lugares: um trigger no banco, a normalização da API e o converter do token, que ignora a lista para administradores.
+- O módulo `usuarios` é **exclusivo de administradores**. Para um `USUARIO`, `*` libera todos os módulos exceto esse, e enviar `"usuarios"` na lista responde 400.
+- A API grava a forma canônica: `*` prevalece sobre o resto, repetições são removidas e os módulos ficam na ordem do menu (`["produtos", "dashboard", "produtos"]` vira `["dashboard", "produtos"]`).
+- Valores desconhecidos são recusados com 400 pela API e por uma `check constraint` no banco.
+
+**O que cada módulo libera na API**
+
+| Rota | Exige |
+|---|---|
+| `GET /api/v1/produtos/resumo` | `dashboard` |
+| `GET /api/v1/produtos/**` (catálogo, produto, histórico) | `dashboard` ou `produtos` (o dashboard mostra a lista do que repor) |
+| `POST`, `PUT`, `DELETE` em `/api/v1/produtos/**` (inclusive movimentações) | `produtos` |
+| `/api/v1/usuarios/**` (exceto `/me`) | papel `ADMIN` |
+
+**Como funciona por dentro**
+
+```
+perfis.acessos ──trigger──▶ auth.users.app_metadata.acessos ──▶ JWT ──▶ PermissoesDoTokenConverter ──▶ MODULO_DASHBOARD, MODULO_PRODUTOS...
+```
+
+1. O admin altera os acessos pelo painel (`PUT /api/v1/usuarios/{id}`) ou direto no banco.
+2. O trigger `ao_definir_papel` copia papel e acessos para o `app_metadata` do usuário no Supabase Auth.
+3. No próximo login ou renovação, o JWT sai com os acessos novos. O `PermissoesDoTokenConverter` transforma cada módulo liberado em uma autoridade `MODULO_*`, que o `SecurityConfig` exige rota a rota.
+4. O painel usa a mesma regra para esconder menus e bloquear rotas, mas quem decide de fato é a API.
+
+Tokens emitidos antes da coluna existir não trazem `acessos` e recebem o padrão (`dashboard` e `produtos`), então ninguém perde acesso na migração.
+
+**Alterar direto no banco (SQL Editor do Supabase)**
+
+```sql
+-- Limitar uma pessoa ao dashboard
+update public.perfis set acessos = '["dashboard"]' where email = 'maria@exemplo.com';
+
+-- Liberar tudo
+update public.perfis set acessos = '["*"]' where email = 'maria@exemplo.com';
+```
+
+A estrutura da coluna:
+
+```sql
+acessos jsonb not null default '["dashboard", "produtos"]'
+  check (jsonb_typeof(acessos) = 'array'
+         and acessos <@ '["*", "dashboard", "produtos", "usuarios"]'
+         and (papel = 'ADMIN' or not acessos ? 'usuarios'))
+```
+
+**Adicionar um módulo novo** exige quatro passos: incluir a chave no enum `Modulo` da API, ampliar a `check constraint` da coluna, proteger as rotas dele no `SecurityConfig` com `Modulo.X.autoridade()` e cadastrá-lo na lista `MODULOS` do painel.
 
 ### Produtos (`/api/v1/produtos`)
 
@@ -324,6 +404,16 @@ curl -i -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1
 
 # Dados do usuário logado
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/usuarios/me
+
+# (ADMIN) Limitar um usuário ao dashboard
+curl -X PUT http://localhost:8080/api/v1/usuarios/{id} \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"nome": "Maria Souza", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"]}'
+
+# (ADMIN) Definir uma nova senha
+curl -i -X PUT http://localhost:8080/api/v1/usuarios/{id}/senha \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"senha": "novaSenha123"}'
 ```
 
 ### Formato dos erros
@@ -356,7 +446,7 @@ Outros exemplos:
   "detail": "Faça login e envie o token no cabeçalho Authorization: Bearer <token>" }
 
 { "title": "Acesso negado", "status": 403,
-  "detail": "Esta operação é restrita a administradores" }
+  "detail": "Seu usuário não tem permissão para esta operação. Peça a um administrador para liberar o acesso." }
 ```
 
 ## Arquitetura
@@ -369,9 +459,9 @@ br.com.triboraizes.produtosapi
 ├── dao           Contratos (ProdutoDAO, MovimentacaoDAO, PerfilDAO) e implementações JPA e Supabase
 ├── factory       DAOFactory: criação dos DAOs JPA
 ├── client        SupabaseAuthClient: chamadas ao Supabase Auth
-├── security      Conversão do papel do JWT em permissões do Spring Security
+├── security      Conversão do papel e dos acessos do JWT em permissões do Spring Security
 ├── dto           Dados de entrada e saída da API
-├── model         Entidades JPA (Produto, MovimentacaoEstoque), Perfil, Papel e objetos de valor
+├── model         Entidades JPA (Produto, MovimentacaoEstoque), Perfil, Papel, Modulo, Acessos e objetos de valor
 └── exception     Exceções de domínio e tratamento global de erros
 ```
 
@@ -432,7 +522,8 @@ Fluxo de uma requisição de produto: `filtro JWT → Controller → Service →
 **O que já existe**
 
 - **Autenticação com JWT** emitido pelo Supabase Auth (ES256). A API é um resource server sem estado: valida assinatura, emissor, audiência e expiração de cada token. Senhas nunca passam pelo banco desta API.
-- **Autorização por papel:** `ADMIN` e `USUARIO`, lidos do `app_metadata` do token, que só a chave secreta consegue alterar. Rotas de gestão de usuários respondem 403 para quem não é admin, e um admin não pode remover o próprio acesso.
+- **Autorização por papel e por módulo:** papel (`ADMIN`, `USUARIO`) e acessos são lidos do `app_metadata` do token, que só a chave secreta consegue alterar. Rotas de produtos exigem o módulo correspondente, rotas de gestão de usuários exigem `ADMIN`, e um admin não pode remover o próprio acesso de administrador.
+- **Senhas inacessíveis:** ficam só como hash no Supabase Auth. Nem a API nem os administradores conseguem lê-las, apenas definir uma nova.
 - **Chave secreta só no servidor:** a `SUPABASE_SECRET_KEY` vem de variável de ambiente, nunca do repositório, e o painel não fala direto com o Supabase.
 - **Tabela de perfis protegida por RLS** sem políticas públicas: só o backend, com a chave secreta, lê e escreve.
 - **Validação de entrada** com Bean Validation em todos os campos, com limites de tamanho e de valor (inclusive na quantidade de uma movimentação e no tamanho da página).
@@ -449,7 +540,7 @@ Fluxo de uma requisição de produto: `filtro JWT → Controller → Service →
 | Ausente | Motivo neste projeto | O que seria feito em produção |
 |---|---|---|
 | Limite de requisições próprio | O Supabase Auth já limita tentativas de login; o restante é um banco em memória sem dado real | Rate limit por IP ou por usuário (Bucket4j ou no gateway), respondendo 429 |
-| Revogação imediata de token | O `accessToken` expira em 1 hora e a troca de papel vale na próxima renovação | Tokens mais curtos ou checagem do papel no banco a cada requisição sensível |
+| Revogação imediata de token | O `accessToken` expira em 1 hora e a troca de papel ou de acessos vale na próxima renovação | Tokens mais curtos ou checagem do papel no banco a cada requisição sensível |
 | Cofre de segredos | Uma única chave, guardada nas variáveis de ambiente do Render | Vault ou o gerenciador de segredos do provedor de nuvem, com rotação |
 | Auditoria de quem alterou | Os produtos ficam no H2 em memória e reiniciam com o serviço | Gravar o `sub` do JWT junto com `criadoEm` e `atualizadoEm` |
 

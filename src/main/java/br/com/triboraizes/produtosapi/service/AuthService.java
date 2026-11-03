@@ -6,6 +6,7 @@ import br.com.triboraizes.produtosapi.dto.LoginRequestDTO;
 import br.com.triboraizes.produtosapi.dto.RegistroRequestDTO;
 import br.com.triboraizes.produtosapi.dto.SessaoDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
+import br.com.triboraizes.produtosapi.model.Acessos;
 import br.com.triboraizes.produtosapi.model.Papel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +53,9 @@ public class AuthService {
         Map<String, Object> app = user.appMetadata() == null ? Map.of() : user.appMetadata();
         Map<String, Object> dados = user.userMetadata() == null ? Map.of() : user.userMetadata();
         Object nome = dados.getOrDefault("nome", user.email());
-        UsuarioDTO usuario = new UsuarioDTO(user.id(), String.valueOf(nome), user.email(), Papel.de(app.get("papel")), null);
+        Papel papel = Papel.de(app.get("papel"));
+        UsuarioDTO usuario = new UsuarioDTO(user.id(), String.valueOf(nome), user.email(), papel,
+                Acessos.de(app.get("acessos"), papel), null);
         return new SessaoDTO(sessao.accessToken(), sessao.refreshToken(), Instant.ofEpochSecond(sessao.expiresAt()), usuario);
     }
 }

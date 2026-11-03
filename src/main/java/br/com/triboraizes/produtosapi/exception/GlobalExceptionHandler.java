@@ -118,7 +118,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail handleAcessoNegado(AccessDeniedException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,
-                "Esta operação é restrita a administradores");
+                "Seu usuário não tem permissão para esta operação. Peça a um administrador para liberar o acesso.");
         problem.setTitle("Acesso negado");
         return problem;
     }

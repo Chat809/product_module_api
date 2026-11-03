@@ -1,6 +1,7 @@
 package br.com.triboraizes.produtosapi.config;
 
-import br.com.triboraizes.produtosapi.security.PapelDoTokenConverter;
+import br.com.triboraizes.produtosapi.model.Modulo;
+import br.com.triboraizes.produtosapi.security.PermissoesDoTokenConverter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -27,7 +28,8 @@ import java.util.Collection;
 
 /**
  * A API é um resource server: valida o JWT emitido pelo Supabase Auth (ES256, chaves públicas do JWKS)
- * e não guarda sessão. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
+ * e não guarda sessão. As rotas de produtos exigem o módulo correspondente ({@code MODULO_*}) e as de usuários,
+ * o papel ADMIN. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
  */
 @Configuration
 @EnableConfigurationProperties(SupabaseProperties.class)
@@ -45,7 +47,7 @@ public class SecurityConfig {
                 resolver.resolveException(request, response, null, ex);
 
         JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
-        conversor.setJwtGrantedAuthoritiesConverter(new PapelDoTokenConverter());
+        conversor.setJwtGrantedAuthoritiesConverter(new PermissoesDoTokenConverter());
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -61,6 +63,12 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/h2-console/**", "/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/me").authenticated()
                         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/produtos/resumo")
+                        .hasAuthority(Modulo.DASHBOARD.autoridade())
+                        // O dashboard também lê o catálogo e o histórico; alterar qualquer coisa exige o módulo de produtos.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/produtos/**")
+                        .hasAnyAuthority(Modulo.DASHBOARD.autoridade(), Modulo.PRODUTOS.autoridade())
+                        .requestMatchers("/api/v1/produtos/**").hasAuthority(Modulo.PRODUTOS.autoridade())
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(conversor))

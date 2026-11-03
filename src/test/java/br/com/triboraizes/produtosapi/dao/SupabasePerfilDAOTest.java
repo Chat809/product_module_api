@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -36,7 +37,7 @@ class SupabasePerfilDAOTest {
     private static final UUID ID = UUID.fromString("6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e");
     private static final String PERFIL_JSON = """
             [{"id": "6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e", "nome": "Maria", "email": "maria@exemplo.com",
-              "papel": "ADMIN", "criado_em": "2026-11-03T08:15:30.123456+00:00"}]
+              "papel": "ADMIN", "acessos": ["*"], "criado_em": "2026-11-03T08:15:30.123456+00:00"}]
             """;
 
     private MockRestServiceServer servidor;
@@ -53,7 +54,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve buscar o perfil por id e converter o timestamp do Postgres")
     void deveBuscarPorId() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,criado_em&id=eq." + ID))
+        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&id=eq." + ID))
                 .andExpect(method(GET))
                 .andExpect(header("apikey", "sb_secret_teste"))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
@@ -62,13 +63,14 @@ class SupabasePerfilDAOTest {
 
         assertThat(perfil.nome()).isEqualTo("Maria");
         assertThat(perfil.papel()).isEqualTo(Papel.ADMIN);
+        assertThat(perfil.acessos()).containsExactly("*");
         assertThat(perfil.criadoEm()).isEqualTo(OffsetDateTime.parse("2026-11-03T08:15:30.123456Z"));
     }
 
     @Test
     @DisplayName("Deve devolver vazio quando o id não existir")
     void deveDevolverVazio() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,criado_em&id=eq." + ID))
+        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&id=eq." + ID))
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
         assertThat(dao.buscarPorId(ID)).isEmpty();
@@ -77,7 +79,7 @@ class SupabasePerfilDAOTest {
     @Test
     @DisplayName("Deve listar a página pedida em ordem alfabética")
     void deveListar() {
-        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,criado_em&order=nome.asc&offset=20&limit=10"))
+        servidor.expect(requestTo(TABELA + "?select=id,nome,email,papel,acessos,criado_em&order=nome.asc&offset=20&limit=10"))
                 .andExpect(method(GET))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
 
@@ -103,15 +105,18 @@ class SupabasePerfilDAOTest {
     }
 
     @Test
-    @DisplayName("Deve atualizar o papel e devolver o perfil gravado")
-    void deveAtualizarPapel() {
-        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=id,nome,email,papel,criado_em"))
+    @DisplayName("Deve gravar nome, e-mail, papel e acessos (como array JSON) e devolver o perfil gravado")
+    void deveAtualizar() {
+        servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=id,nome,email,papel,acessos,criado_em"))
                 .andExpect(method(PATCH))
                 .andExpect(header("Prefer", "return=representation"))
-                .andExpect(content().json("{\"papel\": \"ADMIN\"}"))
+                .andExpect(content().json("""
+                        {"nome": "Maria", "email": "maria@exemplo.com", "papel": "ADMIN", "acessos": ["*"]}
+                        """, JsonCompareMode.STRICT))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
 
-        assertThat(dao.atualizarPapel(ID, Papel.ADMIN)).get().extracting(Perfil::papel).isEqualTo(Papel.ADMIN);
+        assertThat(dao.atualizar(ID, "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*")))
+                .get().extracting(Perfil::papel).isEqualTo(Papel.ADMIN);
     }
 
     @Test

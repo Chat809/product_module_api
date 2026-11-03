@@ -28,7 +28,7 @@ public class SupabasePerfilDAO implements PerfilDAO {
     private static final Logger log = LoggerFactory.getLogger(SupabasePerfilDAO.class);
 
     private static final String TABELA = "/rest/v1/perfis";
-    private static final String COLUNAS = "id,nome,email,papel,criado_em";
+    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em";
     private static final ParameterizedTypeReference<List<Perfil>> LISTA = new ParameterizedTypeReference<>() {
     };
 
@@ -76,12 +76,12 @@ public class SupabasePerfilDAO implements PerfilDAO {
     }
 
     @Override
-    public Optional<Perfil> atualizarPapel(UUID id, Papel papel) {
+    public Optional<Perfil> atualizar(UUID id, String nome, String email, Papel papel, List<String> acessos) {
         return chamar(() -> primeiro(restClient.patch()
                 .uri(TABELA + "?id=eq.{id}&select=" + COLUNAS, id)
                 .header("Prefer", "return=representation")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("papel", papel.name()))
+                .body(Map.of("nome", nome, "email", email, "papel", papel.name(), "acessos", acessos))
                 .retrieve()
                 .body(LISTA)));
     }

@@ -1,7 +1,8 @@
 package br.com.triboraizes.produtosapi.controller;
 
-import br.com.triboraizes.produtosapi.dto.AlterarPapelRequestDTO;
+import br.com.triboraizes.produtosapi.dto.AtualizarUsuarioRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
+import br.com.triboraizes.produtosapi.dto.RedefinirSenhaRequestDTO;
 import br.com.triboraizes.produtosapi.dto.UsuarioDTO;
 import br.com.triboraizes.produtosapi.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,20 +13,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ACESSO_INVALIDO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ACESSO_NEGADO;
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.DADOS_INVALIDOS;
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.EMAIL_JA_CADASTRADO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.NAO_AUTENTICADO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.OPERACAO_NAO_PERMITIDA;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.PROBLEM_JSON;
@@ -33,7 +39,7 @@ import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.USUARIO_N
 
 @RestController
 @RequestMapping("/api/v1/usuarios")
-@Tag(name = "Usuários", description = "Dados do usuário logado e gestão de papéis (administradores)")
+@Tag(name = "Usuários", description = "Dados do usuário logado e gestão de usuários, papéis e acessos (administradores)")
 @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
         content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                 examples = @ExampleObject(value = NAO_AUTENTICADO)))
@@ -64,22 +70,50 @@ public class UsuarioController {
         return usuarioService.listar(page, size);
     }
 
-    @PatchMapping("/{id}/papel")
-    @Operation(summary = "Altera o papel de um usuário (somente ADMIN)",
-            description = "O usuário afetado passa a ter o novo papel no próximo login ou renovação de sessão.")
-    @ApiResponse(responseCode = "200", description = "Papel alterado")
+    @PutMapping("/{id}")
+    @Operation(summary = "Edita nome, e-mail, papel e acessos de um usuário (somente ADMIN)",
+            description = "Acessos: [\"*\"] libera todos os módulos; uma lista como [\"dashboard\"] limita aos módulos "
+                    + "indicados. ADMIN sempre fica com [\"*\"] e o módulo 'usuarios' é exclusivo de ADMIN. "
+                    + "O usuário afetado recebe o novo papel e os novos acessos no próximo login ou renovação de sessão.")
+    @ApiResponse(responseCode = "200", description = "Usuário atualizado")
+    @ApiResponse(responseCode = "400", description = "Campos inválidos ou acesso desconhecido",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_INVALIDO)))
     @ApiResponse(responseCode = "403", description = "Usuário sem papel ADMIN",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = ACESSO_NEGADO)))
     @ApiResponse(responseCode = "404", description = "Usuário não encontrado",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = USUARIO_NAO_ENCONTRADO)))
-    @ApiResponse(responseCode = "422", description = "Admin tentando remover o próprio acesso",
+    @ApiResponse(responseCode = "409", description = "O novo e-mail já pertence a outra conta",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = EMAIL_JA_CADASTRADO)))
+    @ApiResponse(responseCode = "422", description = "Admin tentando remover o próprio acesso de administrador",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = OPERACAO_NAO_PERMITIDA)))
-    public UsuarioDTO alterarPapel(@PathVariable UUID id,
-                                   @Valid @RequestBody AlterarPapelRequestDTO request,
-                                   @AuthenticationPrincipal Jwt jwt) {
-        return usuarioService.alterarPapel(id, request.papel(), UUID.fromString(jwt.getSubject()));
+    public UsuarioDTO atualizar(@PathVariable UUID id,
+                                @Valid @RequestBody AtualizarUsuarioRequestDTO request,
+                                @AuthenticationPrincipal Jwt jwt) {
+        return usuarioService.atualizar(id, request, UUID.fromString(jwt.getSubject()));
+    }
+
+    @PutMapping("/{id}/senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Define uma nova senha para o usuário (somente ADMIN)",
+            description = "As senhas ficam no Supabase Auth apenas como hash, então não podem ser consultadas, só redefinidas.")
+    @ApiResponse(responseCode = "204", description = "Senha redefinida")
+    @ApiResponse(responseCode = "400", description = "Senha fora das regras (6 a 72 caracteres)",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = DADOS_INVALIDOS)))
+    @ApiResponse(responseCode = "403", description = "Usuário sem papel ADMIN",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_NEGADO)))
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = USUARIO_NAO_ENCONTRADO)))
+    public void redefinirSenha(@PathVariable UUID id,
+                               @Valid @RequestBody RedefinirSenhaRequestDTO request,
+                               @AuthenticationPrincipal Jwt jwt) {
+        usuarioService.redefinirSenha(id, request.senha(), UUID.fromString(jwt.getSubject()));
     }
 }

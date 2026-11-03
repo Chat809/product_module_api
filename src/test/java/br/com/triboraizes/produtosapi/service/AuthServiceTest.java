@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,7 +42,8 @@ class AuthServiceTest {
     @DisplayName("Registro deve normalizar o e-mail, criar a conta e já abrir a sessão")
     void deveRegistrarEEntrar() {
         when(authClient.entrar("maria@exemplo.com", "segredo1"))
-                .thenReturn(sessao(Map.of("papel", "USUARIO"), Map.of("nome", "Maria")));
+                .thenReturn(sessao(Map.of("papel", "USUARIO", "acessos", List.of("dashboard", "produtos")),
+                        Map.of("nome", "Maria")));
 
         SessaoDTO sessao = authService.registrar(new RegistroRequestDTO("  Maria ", " Maria@Exemplo.com ", "segredo1"));
 
@@ -50,6 +52,7 @@ class AuthServiceTest {
         ordem.verify(authClient).entrar("maria@exemplo.com", "segredo1");
         assertThat(sessao.usuario().papel()).isEqualTo(Papel.USUARIO);
         assertThat(sessao.usuario().nome()).isEqualTo("Maria");
+        assertThat(sessao.usuario().acessos()).containsExactly("dashboard", "produtos");
     }
 
     @Test
@@ -65,6 +68,7 @@ class AuthServiceTest {
         assertThat(sessao.expiraEm()).isEqualTo(Instant.ofEpochSecond(1793707200L));
         assertThat(sessao.usuario().id()).isEqualTo(ID);
         assertThat(sessao.usuario().papel()).isEqualTo(Papel.ADMIN);
+        assertThat(sessao.usuario().acessos()).containsExactly("*");
     }
 
     @Test
@@ -76,5 +80,6 @@ class AuthServiceTest {
 
         assertThat(sessao.usuario().nome()).isEqualTo("maria@exemplo.com");
         assertThat(sessao.usuario().papel()).isEqualTo(Papel.USUARIO);
+        assertThat(sessao.usuario().acessos()).containsExactly("dashboard", "produtos");
     }
 }

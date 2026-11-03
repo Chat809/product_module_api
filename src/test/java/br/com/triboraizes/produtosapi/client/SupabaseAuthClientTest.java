@@ -7,11 +7,13 @@ import br.com.triboraizes.produtosapi.exception.CredenciaisInvalidasException;
 import br.com.triboraizes.produtosapi.exception.EmailJaCadastradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.ServicoDeUsuariosIndisponivelException;
+import br.com.triboraizes.produtosapi.exception.UsuarioNaoEncontradoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -28,6 +30,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.http.HttpMethod.POST;
+import static org.springframework.http.HttpMethod.PUT;
 
 class SupabaseAuthClientTest {
 
@@ -180,6 +183,60 @@ class SupabaseAuthClientTest {
         assertThatThrownBy(() -> client.entrar("a@b.com", "x")).isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
         assertThatThrownBy(() -> client.entrar("a@b.com", "x")).isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
         assertThatThrownBy(() -> client.criarUsuario("A", "a@b.com", "x"))
+                .isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
+    }
+
+    @Test
+    @DisplayName("Deve alterar nome e e-mail pela API admin, mantendo o e-mail confirmado")
+    void deveAtualizarDados() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andExpect(method(PUT))
+                .andExpect(content().json("""
+                        {"email": "nova@exemplo.com", "email_confirm": true, "user_metadata": {"nome": "Maria S."}}
+                        """))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.atualizarDados(ID, "Maria S.", "nova@exemplo.com");
+
+        servidor.verify();
+    }
+
+    @Test
+    @DisplayName("Deve redefinir a senha enviando só o campo password")
+    void deveRedefinirSenha() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andExpect(method(PUT))
+                .andExpect(content().json("{\"password\": \"novaSenha1\"}", JsonCompareMode.STRICT))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        client.redefinirSenha(ID, "novaSenha1");
+
+        servidor.verify();
+    }
+
+    @Test
+    @DisplayName("Na edição: e-mail de outra conta vira 409, id inexistente vira 404 e senha fraca vira 400")
+    void deveTraduzirErrosDaEdicao() {
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"email_exists\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"user_not_found\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error_code\": \"weak_password\", \"msg\": \"Password is too weak\"}"));
+        servidor.expect(requestTo(URL + "/auth/v1/admin/users/" + ID))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.atualizarDados(ID, "Maria", "joao@exemplo.com"))
+                .isInstanceOf(EmailJaCadastradoException.class)
+                .hasMessageContaining("joao@exemplo.com");
+        assertThatThrownBy(() -> client.redefinirSenha(ID, "novaSenha1"))
+                .isInstanceOf(UsuarioNaoEncontradoException.class);
+        assertThatThrownBy(() -> client.redefinirSenha(ID, "123456"))
+                .isInstanceOf(RequisicaoInvalidaException.class);
+        assertThatThrownBy(() -> client.redefinirSenha(ID, "novaSenha1"))
                 .isInstanceOf(ServicoDeUsuariosIndisponivelException.class);
     }
 

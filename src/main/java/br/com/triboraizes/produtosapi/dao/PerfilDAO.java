@@ -17,6 +17,6 @@ public interface PerfilDAO {
 
     long contar();
 
-    /** Grava o novo papel e devolve o perfil atualizado, ou vazio se o id não existir. */
-    Optional<Perfil> atualizarPapel(UUID id, Papel papel);
+    /** Grava os dados editáveis e devolve o perfil atualizado, ou vazio se o id não existir. */
+    Optional<Perfil> atualizar(UUID id, String nome, String email, Papel papel, List<String> acessos);
 }
