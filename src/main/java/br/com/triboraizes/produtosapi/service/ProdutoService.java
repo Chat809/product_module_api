@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
@@ -40,6 +41,9 @@ public class ProdutoService {
     @Transactional
     public ProdutoResponseDTO atualizar(UUID id, ProdutoRequestDTO request) {
         Produto produto = buscarEntidade(id);
+        if (request.versao() != null && !request.versao().equals(produto.getVersao())) {
+            throw new ConflitoDeVersaoException(id);
+        }
         produto.atualizar(request.nome(), request.descricao(), request.preco(), request.quantidadeEmEstoque());
         Produto atualizado = produtoDAO.atualizar(produto);
         log.info("Produto atualizado: id={}", id);

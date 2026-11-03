@@ -1,7 +1,9 @@
 package br.com.triboraizes.produtosapi.exception;
 
+import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -33,6 +35,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleProdutoNaoEncontrado(ProdutoNaoEncontradoException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Produto não encontrado");
+        return problem;
+    }
+
+    @ExceptionHandler(ConflitoDeVersaoException.class)
+    public ProblemDetail handleConflitoDeVersao(ConflitoDeVersaoException ex) {
+        return conflitoDeEdicao(ex.getMessage());
+    }
+
+    /** Duas transações alteraram o mesmo produto ao mesmo tempo e a segunda perdeu a disputa. */
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ProblemDetail handleEdicaoSimultanea(RuntimeException ex) {
+        return conflitoDeEdicao("O produto foi alterado por outra pessoa. Recarregue os dados e tente novamente.");
+    }
+
+    private static ProblemDetail conflitoDeEdicao(String detalhe) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detalhe);
+        problem.setTitle("Conflito de edição");
         return problem;
     }
 

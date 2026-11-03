@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
@@ -57,7 +58,7 @@ class ProdutoServiceTest {
     @DisplayName("Deve criar um produto e retornar seus dados com o id gerado")
     void deveCriarProduto() {
         // given
-        ProdutoRequestDTO request = new ProdutoRequestDTO("  Teclado  ", "Mecânico", new BigDecimal("349.90"), 25);
+        ProdutoRequestDTO request = new ProdutoRequestDTO("  Teclado  ", "Mecânico", new BigDecimal("349.90"), 25, null);
         when(produtoDAO.salvar(any(Produto.class))).thenAnswer(invocation -> {
             Produto produto = invocation.getArgument(0);
             ReflectionTestUtils.setField(produto, "id", ID);
@@ -82,7 +83,7 @@ class ProdutoServiceTest {
         Produto existente = produtoComId(ID, "Teclado", "Antigo", "100.00", 5);
         when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(existente));
         when(produtoDAO.atualizar(existente)).thenReturn(existente);
-        ProdutoRequestDTO request = new ProdutoRequestDTO("Mouse", "Sem fio", new BigDecimal("89.9"), 10);
+        ProdutoRequestDTO request = new ProdutoRequestDTO("Mouse", "Sem fio", new BigDecimal("89.9"), 10, null);
 
         // when
         ProdutoResponseDTO response = produtoService.atualizar(ID, request);
@@ -94,11 +95,42 @@ class ProdutoServiceTest {
     }
 
     @Test
+    @DisplayName("Deve atualizar quando a versão enviada for a versão atual do produto")
+    void deveAtualizarQuandoVersaoConferir() {
+        // given
+        Produto existente = produtoComId(ID, "Teclado", null, "100.00", 5);
+        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(existente));
+        when(produtoDAO.atualizar(existente)).thenReturn(existente);
+
+        // when
+        produtoService.atualizar(ID, new ProdutoRequestDTO("Mouse", null, new BigDecimal("89.90"), 10, 0L));
+
+        // then
+        verify(produtoDAO).atualizar(existente);
+    }
+
+    @Test
+    @DisplayName("Deve recusar a atualização quando o produto já tiver sido alterado por outra pessoa")
+    void deveRecusarAtualizacaoComVersaoDesatualizada() {
+        // given
+        Produto existente = produtoComId(ID, "Teclado", null, "100.00", 5);
+        ReflectionTestUtils.setField(existente, "versao", 3L);
+        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(existente));
+        ProdutoRequestDTO request = new ProdutoRequestDTO("Mouse", null, new BigDecimal("89.90"), 10, 2L);
+
+        // when / then
+        assertThatThrownBy(() -> produtoService.atualizar(ID, request))
+                .isInstanceOf(ConflitoDeVersaoException.class);
+        assertThat(existente.getNome()).isEqualTo("Teclado");
+        verify(produtoDAO, never()).atualizar(any());
+    }
+
+    @Test
     @DisplayName("Deve lançar exceção ao atualizar um produto inexistente")
     void deveLancarExcecaoAoAtualizarProdutoInexistente() {
         // given
         when(produtoDAO.buscarPorId(INEXISTENTE)).thenReturn(Optional.empty());
-        ProdutoRequestDTO request = new ProdutoRequestDTO("Mouse", null, new BigDecimal("89.90"), 10);
+        ProdutoRequestDTO request = new ProdutoRequestDTO("Mouse", null, new BigDecimal("89.90"), 10, null);
 
         // when / then
         assertThatThrownBy(() -> produtoService.atualizar(INEXISTENTE, request))
@@ -205,6 +237,7 @@ class ProdutoServiceTest {
     private static Produto produtoComId(UUID id, String nome, String descricao, String preco, int quantidade) {
         Produto produto = new Produto(nome, descricao, new BigDecimal(preco), quantidade);
         ReflectionTestUtils.setField(produto, "id", id);
+        ReflectionTestUtils.setField(produto, "versao", 0L);
         return produto;
     }
 }

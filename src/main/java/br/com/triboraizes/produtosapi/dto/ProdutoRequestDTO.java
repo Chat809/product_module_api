@@ -32,7 +32,11 @@ public record ProdutoRequestDTO(
         @Schema(example = "25")
         @NotNull(message = "A quantidade em estoque é obrigatória")
         @PositiveOrZero(message = "A quantidade em estoque não pode ser negativa")
-        Integer quantidadeEmEstoque
+        Integer quantidadeEmEstoque,
+
+        @Schema(description = "Opcional no PUT: versão lida pelo cliente. Se o produto tiver sido alterado depois disso, "
+                + "a API responde 409 em vez de sobrescrever a alteração", example = "0")
+        Long versao
 ) {
 
     public Produto toEntity() {

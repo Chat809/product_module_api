@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -172,6 +174,27 @@ class ProdutoControllerTest {
         mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Teclado"));
+    }
+
+    @Test
+    @DisplayName("PUT /produtos/{id} deve retornar 409 quando a versão enviada estiver desatualizada")
+    void deveRetornar409EmConflitoDeVersao() throws Exception {
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class)))
+                .thenThrow(new ConflitoDeVersaoException(ID));
+
+        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflito de edição"));
+    }
+
+    @Test
+    @DisplayName("PUT /produtos/{id} deve retornar 409 quando outra transação alterar o produto ao mesmo tempo")
+    void deveRetornar409EmEdicaoSimultanea() throws Exception {
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException("Produto", ID));
+
+        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isConflict());
     }
 
     @Test
