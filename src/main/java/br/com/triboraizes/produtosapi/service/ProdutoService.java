@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -33,7 +34,7 @@ public class ProdutoService {
     }
 
     @Transactional
-    public ProdutoResponseDTO atualizar(Long id, ProdutoRequestDTO request) {
+    public ProdutoResponseDTO atualizar(UUID id, ProdutoRequestDTO request) {
         Produto produto = buscarEntidade(id);
         produto.atualizar(request.nome(), request.descricao(), request.preco(), request.quantidadeEmEstoque());
         Produto atualizado = produtoDAO.atualizar(produto);
@@ -42,12 +43,12 @@ public class ProdutoService {
     }
 
     @Transactional
-    public void remover(Long id) {
+    public void remover(UUID id) {
         produtoDAO.remover(buscarEntidade(id));
         log.info("Produto removido: id={}", id);
     }
 
-    public ProdutoResponseDTO buscarPorId(Long id) {
+    public ProdutoResponseDTO buscarPorId(UUID id) {
         return ProdutoResponseDTO.from(buscarEntidade(id));
     }
 
@@ -57,7 +58,7 @@ public class ProdutoService {
                 .toList();
     }
 
-    private Produto buscarEntidade(Long id) {
+    private Produto buscarEntidade(UUID id) {
         return produtoDAO.buscarPorId(id)
                 .orElseThrow(() -> new ProdutoNaoEncontradoException(id));
     }

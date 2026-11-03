@@ -6,17 +6,22 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "produtos")
 public class Produto {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 120)
     private String nome;
@@ -29,6 +34,18 @@ public class Produto {
 
     @Column(name = "quantidade_em_estoque", nullable = false)
     private Integer quantidadeEmEstoque;
+
+    @CreationTimestamp
+    @Column(name = "criado_em", nullable = false, updatable = false)
+    private Instant criadoEm;
+
+    @UpdateTimestamp
+    @Column(name = "atualizado_em", nullable = false)
+    private Instant atualizadoEm;
+
+    @Version
+    @Column(nullable = false)
+    private Long versao;
 
     protected Produto() {
     }
@@ -48,7 +65,7 @@ public class Produto {
         return valor == null ? null : valor.strip();
     }
 
-    public Long getId() {
+    public UUID getId() {
         return id;
     }
 
@@ -66,5 +83,17 @@ public class Produto {
 
     public Integer getQuantidadeEmEstoque() {
         return quantidadeEmEstoque;
+    }
+
+    public Instant getCriadoEm() {
+        return criadoEm;
+    }
+
+    public Instant getAtualizadoEm() {
+        return atualizadoEm;
+    }
+
+    public Long getVersao() {
+        return versao;
     }
 }

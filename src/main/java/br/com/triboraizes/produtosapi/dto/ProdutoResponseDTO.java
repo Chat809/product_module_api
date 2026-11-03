@@ -4,14 +4,20 @@ import br.com.triboraizes.produtosapi.model.Produto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 
 @Schema(description = "Representação de um produto retornada pela API")
 public record ProdutoResponseDTO(
-        Long id,
+        UUID id,
         String nome,
         String descricao,
         BigDecimal preco,
-        Integer quantidadeEmEstoque
+        Integer quantidadeEmEstoque,
+        Instant criadoEm,
+        Instant atualizadoEm,
+        @Schema(description = "Versão do registro, usada para detectar edições concorrentes")
+        Long versao
 ) {
 
     public static ProdutoResponseDTO from(Produto produto) {
@@ -20,7 +26,10 @@ public record ProdutoResponseDTO(
                 produto.getNome(),
                 produto.getDescricao(),
                 produto.getPreco(),
-                produto.getQuantidadeEmEstoque()
+                produto.getQuantidadeEmEstoque(),
+                produto.getCriadoEm(),
+                produto.getAtualizadoEm(),
+                produto.getVersao()
         );
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,17 +33,20 @@ class JpaProdutoDAOTest {
     }
 
     @Test
-    @DisplayName("Deve salvar um produto gerando o id")
+    @DisplayName("Deve salvar um produto gerando id UUID, datas de auditoria e versão")
     void deveSalvarProduto() {
         Produto produto = produtoDAO.salvar(novoProduto("Teclado"));
 
         assertThat(produto.getId()).isNotNull();
+        assertThat(produto.getCriadoEm()).isNotNull();
+        assertThat(produto.getAtualizadoEm()).isNotNull();
+        assertThat(produto.getVersao()).isZero();
     }
 
     @Test
     @DisplayName("Deve buscar um produto salvo pelo id")
     void deveBuscarPorId() {
-        Long id = produtoDAO.salvar(novoProduto("Teclado")).getId();
+        UUID id = produtoDAO.salvar(novoProduto("Teclado")).getId();
         limparContexto();
 
         assertThat(produtoDAO.buscarPorId(id))
@@ -55,11 +59,11 @@ class JpaProdutoDAOTest {
     @Test
     @DisplayName("Deve retornar vazio ao buscar um id inexistente")
     void deveRetornarVazioQuandoIdNaoExistir() {
-        assertThat(produtoDAO.buscarPorId(999L)).isEmpty();
+        assertThat(produtoDAO.buscarPorId(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    @DisplayName("Deve listar todos os produtos ordenados pelo id")
+    @DisplayName("Deve listar todos os produtos ordenados pelo nome")
     void deveListarTodos() {
         produtoDAO.salvar(novoProduto("Teclado"));
         produtoDAO.salvar(novoProduto("Mouse"));
@@ -67,7 +71,7 @@ class JpaProdutoDAOTest {
 
         assertThat(produtoDAO.listarTodos())
                 .extracting(Produto::getNome)
-                .containsExactly("Teclado", "Mouse");
+                .containsExactly("Mouse", "Teclado");
     }
 
     @Test
@@ -82,12 +86,13 @@ class JpaProdutoDAOTest {
         Produto atualizado = produtoDAO.buscarPorId(produto.getId()).orElseThrow();
         assertThat(atualizado.getNome()).isEqualTo("Mouse");
         assertThat(atualizado.getQuantidadeEmEstoque()).isEqualTo(3);
+        assertThat(atualizado.getVersao()).isEqualTo(1L);
     }
 
     @Test
     @DisplayName("Deve remover um produto")
     void deveRemoverProduto() {
-        Long id = produtoDAO.salvar(novoProduto("Teclado")).getId();
+        UUID id = produtoDAO.salvar(novoProduto("Teclado")).getId();
         limparContexto();
 
         produtoDAO.remover(produtoDAO.buscarPorId(id).orElseThrow());

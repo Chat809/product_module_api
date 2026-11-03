@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.model.Produto;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Contrato de acesso a dados de {@link Produto}, independente da tecnologia de persistência.
@@ -11,12 +12,14 @@ import java.util.Optional;
  */
 public interface ProdutoDAO {
 
+    /** Grava o produto e sincroniza com o banco, preenchendo id, datas e versão. */
     Produto salvar(Produto produto);
 
-    Optional<Produto> buscarPorId(Long id);
+    Optional<Produto> buscarPorId(UUID id);
 
     List<Produto> listarTodos();
 
+    /** Grava as alterações e sincroniza com o banco, atualizando a data e a versão. */
     Produto atualizar(Produto produto);
 
     void remover(Produto produto);

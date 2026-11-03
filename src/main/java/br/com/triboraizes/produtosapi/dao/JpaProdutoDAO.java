@@ -5,6 +5,7 @@ import jakarta.persistence.EntityManager;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public class JpaProdutoDAO implements ProdutoDAO {
 
@@ -17,24 +18,27 @@ public class JpaProdutoDAO implements ProdutoDAO {
     @Override
     public Produto salvar(Produto produto) {
         entityManager.persist(produto);
+        entityManager.flush();
         return produto;
     }
 
     @Override
-    public Optional<Produto> buscarPorId(Long id) {
+    public Optional<Produto> buscarPorId(UUID id) {
         return Optional.ofNullable(entityManager.find(Produto.class, id));
     }
 
     @Override
     public List<Produto> listarTodos() {
         return entityManager
-                .createQuery("select p from Produto p order by p.id", Produto.class)
+                .createQuery("select p from Produto p order by p.nome, p.id", Produto.class)
                 .getResultList();
     }
 
     @Override
     public Produto atualizar(Produto produto) {
-        return entityManager.merge(produto);
+        Produto gerenciado = entityManager.merge(produto);
+        entityManager.flush();
+        return gerenciado;
     }
 
     @Override

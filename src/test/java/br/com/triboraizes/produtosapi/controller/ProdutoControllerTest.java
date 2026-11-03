@@ -13,7 +13,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,8 +43,12 @@ class ProdutoControllerTest {
             {"nome": "Teclado", "descricao": "Mecânico", "preco": 349.90, "quantidadeEmEstoque": 25}
             """;
 
+    private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID INEXISTENTE = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private static final Instant AGORA = Instant.parse("2026-11-03T12:00:00Z");
+
     private static final ProdutoResponseDTO RESPONSE =
-            new ProdutoResponseDTO(1L, "Teclado", "Mecânico", new BigDecimal("349.90"), 25);
+            new ProdutoResponseDTO(ID, "Teclado", "Mecânico", new BigDecimal("349.90"), 25, AGORA, AGORA, 0L);
 
     @Autowired
     private MockMvc mockMvc;
@@ -58,16 +64,16 @@ class ProdutoControllerTest {
         mockMvc.perform(get(URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].id").value(ID.toString()))
                 .andExpect(jsonPath("$[0].nome").value("Teclado"));
     }
 
     @Test
     @DisplayName("GET /produtos/{id} deve retornar 200 com o produto")
     void deveBuscarProdutoPorId() throws Exception {
-        when(produtoService.buscarPorId(1L)).thenReturn(RESPONSE);
+        when(produtoService.buscarPorId(ID)).thenReturn(RESPONSE);
 
-        mockMvc.perform(get(URL + "/1"))
+        mockMvc.perform(get(URL + "/" + ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.preco").value(349.90))
                 .andExpect(jsonPath("$.quantidadeEmEstoque").value(25));
@@ -76,17 +82,17 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("GET /produtos/{id} deve retornar 404 quando o produto não existir")
     void deveRetornar404QuandoProdutoNaoExistir() throws Exception {
-        when(produtoService.buscarPorId(99L)).thenThrow(new ProdutoNaoEncontradoException(99L));
+        when(produtoService.buscarPorId(INEXISTENTE)).thenThrow(new ProdutoNaoEncontradoException(INEXISTENTE));
 
-        mockMvc.perform(get(URL + "/99"))
+        mockMvc.perform(get(URL + "/" + INEXISTENTE))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Produto não encontrado"))
-                .andExpect(jsonPath("$.detail").value("Produto com id 99 não encontrado"));
+                .andExpect(jsonPath("$.detail").value("Produto com id " + INEXISTENTE + " não encontrado"));
     }
 
     @Test
-    @DisplayName("GET /produtos/{id} deve retornar 400 quando o id não for numérico")
+    @DisplayName("GET /produtos/{id} deve retornar 400 quando o id não for um UUID válido")
     void deveRetornar400QuandoIdForInvalido() throws Exception {
         mockMvc.perform(get(URL + "/abc"))
                 .andExpect(status().isBadRequest())
@@ -100,8 +106,8 @@ class ProdutoControllerTest {
 
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "http://localhost/api/v1/produtos/1"))
-                .andExpect(jsonPath("$.id").value(1));
+                .andExpect(header().string("Location", "http://localhost/api/v1/produtos/" + ID))
+                .andExpect(jsonPath("$.id").value(ID.toString()));
     }
 
     @Test
@@ -131,9 +137,9 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("PUT /produtos/{id} deve retornar 200 com o produto atualizado")
     void deveAtualizarProduto() throws Exception {
-        when(produtoService.atualizar(eq(1L), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
 
-        mockMvc.perform(put(URL + "/1").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Teclado"));
     }
@@ -141,28 +147,28 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("PUT /produtos/{id} deve retornar 404 quando o produto não existir")
     void deveRetornar404AoAtualizarProdutoInexistente() throws Exception {
-        when(produtoService.atualizar(eq(99L), any(ProdutoRequestDTO.class)))
-                .thenThrow(new ProdutoNaoEncontradoException(99L));
+        when(produtoService.atualizar(eq(INEXISTENTE), any(ProdutoRequestDTO.class)))
+                .thenThrow(new ProdutoNaoEncontradoException(INEXISTENTE));
 
-        mockMvc.perform(put(URL + "/99").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put(URL + "/" + INEXISTENTE).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("DELETE /produtos/{id} deve retornar 204")
     void deveRemoverProduto() throws Exception {
-        mockMvc.perform(delete(URL + "/1"))
+        mockMvc.perform(delete(URL + "/" + ID))
                 .andExpect(status().isNoContent());
 
-        verify(produtoService).remover(1L);
+        verify(produtoService).remover(ID);
     }
 
     @Test
     @DisplayName("DELETE /produtos/{id} deve retornar 404 quando o produto não existir")
     void deveRetornar404AoRemoverProdutoInexistente() throws Exception {
-        doThrow(new ProdutoNaoEncontradoException(99L)).when(produtoService).remover(99L);
+        doThrow(new ProdutoNaoEncontradoException(INEXISTENTE)).when(produtoService).remover(INEXISTENTE);
 
-        mockMvc.perform(delete(URL + "/99"))
+        mockMvc.perform(delete(URL + "/" + INEXISTENTE))
                 .andExpect(status().isNotFound());
     }
 

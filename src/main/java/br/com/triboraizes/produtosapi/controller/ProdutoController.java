@@ -19,6 +19,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/produtos")
@@ -39,7 +40,7 @@ public class ProdutoController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Busca um produto pelo id")
-    public ProdutoResponseDTO buscarPorId(@PathVariable Long id) {
+    public ProdutoResponseDTO buscarPorId(@PathVariable UUID id) {
         return produtoService.buscarPorId(id);
     }
 
@@ -56,13 +57,13 @@ public class ProdutoController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza todos os dados de um produto existente")
-    public ProdutoResponseDTO atualizar(@PathVariable Long id, @Valid @RequestBody ProdutoRequestDTO request) {
+    public ProdutoResponseDTO atualizar(@PathVariable UUID id, @Valid @RequestBody ProdutoRequestDTO request) {
         return produtoService.atualizar(id, request);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Remove um produto")
-    public ResponseEntity<Void> remover(@PathVariable Long id) {
+    public ResponseEntity<Void> remover(@PathVariable UUID id) {
         produtoService.remover(id);
         return ResponseEntity.noContent().build();
     }
