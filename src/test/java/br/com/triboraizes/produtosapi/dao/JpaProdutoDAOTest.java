@@ -2,6 +2,7 @@ package br.com.triboraizes.produtosapi.dao;
 
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
 import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.ResumoEstoque;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -93,6 +94,25 @@ class JpaProdutoDAOTest {
                 .extracting(Produto::getNome)
                 .containsExactly("Mouse", "Teclado mecânico");
         assertThat(produtoDAO.contar("teclado")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Deve calcular os indicadores do estoque")
+    void deveResumirEstoque() {
+        produtoDAO.salvar(new Produto("Teclado", null, new BigDecimal("100.00"), 10));
+        produtoDAO.salvar(new Produto("Mouse", null, new BigDecimal("50.50"), 2));
+        produtoDAO.salvar(new Produto("Monitor", null, new BigDecimal("999.00"), 0));
+        limparContexto();
+
+        assertThat(produtoDAO.resumir(5))
+                .isEqualTo(new ResumoEstoque(3, 12, new BigDecimal("1101.00"), 1, 1));
+    }
+
+    @Test
+    @DisplayName("Deve retornar indicadores zerados quando não houver produtos")
+    void deveResumirEstoqueVazio() {
+        assertThat(produtoDAO.resumir(5))
+                .isEqualTo(new ResumoEstoque(0, 0, new BigDecimal("0.00"), 0, 0));
     }
 
     @Test

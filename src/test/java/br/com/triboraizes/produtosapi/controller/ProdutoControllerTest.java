@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
@@ -98,6 +99,18 @@ class ProdutoControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
                 .andExpect(jsonPath("$.detail").value("O parâmetro 'size' deve estar entre 1 e 500"));
+    }
+
+    @Test
+    @DisplayName("GET /produtos/resumo deve retornar 200 com os indicadores do estoque")
+    void deveRetornarResumo() throws Exception {
+        when(produtoService.resumo()).thenReturn(new ResumoEstoqueDTO(3, 40, new BigDecimal("1500.00"), 1, 1, 5));
+
+        mockMvc.perform(get(URL + "/resumo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalProdutos").value(3))
+                .andExpect(jsonPath("$.valorTotal").value(1500.00))
+                .andExpect(jsonPath("$.limiteEstoqueBaixo").value(5));
     }
 
     @Test

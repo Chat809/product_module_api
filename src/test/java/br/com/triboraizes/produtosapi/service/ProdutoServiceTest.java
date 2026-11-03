@@ -5,12 +5,14 @@ import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
 import br.com.triboraizes.produtosapi.model.MovimentacaoEstoque;
 import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.ResumoEstoque;
 import br.com.triboraizes.produtosapi.model.TipoMovimentacao;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +46,7 @@ class ProdutoServiceTest {
     private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ID_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID INEXISTENTE = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private static final int LIMITE_ESTOQUE_BAIXO = 5;
 
     @Mock
     private DAOFactory daoFactory;
@@ -60,7 +63,7 @@ class ProdutoServiceTest {
     void setUp() {
         when(daoFactory.criarProdutoDAO()).thenReturn(produtoDAO);
         when(daoFactory.criarMovimentacaoDAO()).thenReturn(movimentacaoDAO);
-        produtoService = new ProdutoService(daoFactory);
+        produtoService = new ProdutoService(daoFactory, LIMITE_ESTOQUE_BAIXO);
     }
 
     @Test
@@ -300,6 +303,20 @@ class ProdutoServiceTest {
         // then
         assertThat(pagina.conteudo()).isEmpty();
         assertThat(pagina.totalPaginas()).isZero();
+    }
+
+    @Test
+    @DisplayName("Deve montar o resumo do estoque com o limite de estoque baixo configurado")
+    void deveMontarResumoDoEstoque() {
+        // given
+        when(produtoDAO.resumir(LIMITE_ESTOQUE_BAIXO))
+                .thenReturn(new ResumoEstoque(3, 40, new BigDecimal("1500.00"), 1, 1));
+
+        // when
+        ResumoEstoqueDTO resumo = produtoService.resumo();
+
+        // then
+        assertThat(resumo).isEqualTo(new ResumoEstoqueDTO(3, 40, new BigDecimal("1500.00"), 1, 1, LIMITE_ESTOQUE_BAIXO));
     }
 
     @ParameterizedTest(name = "page={0}, size={1}, sort={2}")

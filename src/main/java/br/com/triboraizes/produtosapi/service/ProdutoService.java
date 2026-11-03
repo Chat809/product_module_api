@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
@@ -14,6 +15,7 @@ import br.com.triboraizes.produtosapi.model.Produto;
 import br.com.triboraizes.produtosapi.model.TipoMovimentacao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,10 +32,12 @@ public class ProdutoService {
 
     private final ProdutoDAO produtoDAO;
     private final MovimentacaoDAO movimentacaoDAO;
+    private final int limiteEstoqueBaixo;
 
-    public ProdutoService(DAOFactory daoFactory) {
+    public ProdutoService(DAOFactory daoFactory, @Value("${app.estoque.limite-baixo:5}") int limiteEstoqueBaixo) {
         this.produtoDAO = daoFactory.criarProdutoDAO();
         this.movimentacaoDAO = daoFactory.criarMovimentacaoDAO();
+        this.limiteEstoqueBaixo = limiteEstoqueBaixo;
     }
 
     @Transactional
@@ -103,6 +107,10 @@ public class ProdutoService {
                 pagina,
                 tamanho,
                 produtoDAO.contar(termo));
+    }
+
+    public ResumoEstoqueDTO resumo() {
+        return ResumoEstoqueDTO.from(produtoDAO.resumir(limiteEstoqueBaixo), limiteEstoqueBaixo);
     }
 
     private Produto buscarEntidade(UUID id) {

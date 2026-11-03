@@ -3,6 +3,7 @@ package br.com.triboraizes.produtosapi.controller;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
+import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +44,12 @@ public class ProdutoController {
             @Parameter(description = "coluna,asc|desc. Colunas: nome, preco, quantidadeEmEstoque, criadoEm, atualizadoEm")
             @RequestParam(defaultValue = "nome,asc") String sort) {
         return produtoService.listar(busca, page, size, sort);
+    }
+
+    @GetMapping("/resumo")
+    @Operation(summary = "Indicadores do estoque: totais, valor em estoque, esgotados e estoque baixo")
+    public ResumoEstoqueDTO resumo() {
+        return produtoService.resumo();
     }
 
     @GetMapping("/{id}")

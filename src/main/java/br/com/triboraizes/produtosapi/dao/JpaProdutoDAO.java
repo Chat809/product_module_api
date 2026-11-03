@@ -1,9 +1,12 @@
 package br.com.triboraizes.produtosapi.dao;
 
 import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.ResumoEstoque;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -60,6 +63,26 @@ public class JpaProdutoDAO implements ProdutoDAO {
     }
 
     @Override
+    public ResumoEstoque resumir(int limiteEstoqueBaixo) {
+        Object[] linha = entityManager.createQuery("""
+                        select count(p),
+                               sum(p.quantidadeEmEstoque),
+                               sum(p.preco * p.quantidadeEmEstoque),
+                               sum(case when p.quantidadeEmEstoque = 0 then 1 else 0 end),
+                               sum(case when p.quantidadeEmEstoque between 1 and :limite then 1 else 0 end)
+                        from Produto p""", Object[].class)
+                .setParameter("limite", limiteEstoqueBaixo)
+                .getSingleResult();
+        // As somas vêm nulas quando não há produtos.
+        return new ResumoEstoque(
+                longOuZero(linha[0]),
+                longOuZero(linha[1]),
+                linha[2] == null ? BigDecimal.ZERO.setScale(2) : new BigDecimal(linha[2].toString()).setScale(2, RoundingMode.HALF_UP),
+                longOuZero(linha[3]),
+                longOuZero(linha[4]));
+    }
+
+    @Override
     public Produto atualizar(Produto produto) {
         Produto gerenciado = entityManager.merge(produto);
         entityManager.flush();
@@ -69,6 +92,10 @@ public class JpaProdutoDAO implements ProdutoDAO {
     @Override
     public void remover(Produto produto) {
         entityManager.remove(entityManager.contains(produto) ? produto : entityManager.merge(produto));
+    }
+
+    private static long longOuZero(Object valor) {
+        return valor == null ? 0 : ((Number) valor).longValue();
     }
 
     private static String padraoDeBusca(String busca) {

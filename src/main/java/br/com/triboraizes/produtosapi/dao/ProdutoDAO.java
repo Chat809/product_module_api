@@ -1,6 +1,7 @@
 package br.com.triboraizes.produtosapi.dao;
 
 import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.ResumoEstoque;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,9 @@ public interface ProdutoDAO {
     List<Produto> listar(String busca, int pagina, int tamanho, String ordenarPor, boolean crescente);
 
     long contar(String busca);
+
+    /** Calcula os indicadores do estoque; estoque baixo é de 1 até {@code limiteEstoqueBaixo} unidades. */
+    ResumoEstoque resumir(int limiteEstoqueBaixo);
 
     /** Grava as alterações e sincroniza com o banco, atualizando a data e a versão. */
     Produto atualizar(Produto produto);
