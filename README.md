@@ -228,6 +228,11 @@ $env:SUPABASE_SECRET_KEY = "<SUPABASE_SECRET_KEY>"    # Linux/macOS: export SUPA
 
 Sem a chave, a aplicação sobe, mas login e os módulos do Supabase respondem 503 explicando o que falta.
 
+**Testar os produtos localmente sem a chave:** a API local confere o token pelas chaves públicas do Supabase, então um token emitido pela API publicada também vale aqui. Os produtos continuam no H2 da sua máquina.
+
+1. Faça login na API publicada pelo [Swagger do Render](https://product-module-api.onrender.com/swagger-ui.html) (`POST /api/v1/auth/login` com seu e-mail e senha) e copie o `accessToken` da resposta. Ele vale por 1 hora.
+2. Abra o [Swagger local](http://localhost:8080/swagger-ui.html), clique em **Authorize**, cole o token e use os endpoints de `/api/v1/produtos`.
+
 | Recurso | URL |
 |---|---|
 | API | http://localhost:8080/api/v1/produtos |
