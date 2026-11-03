@@ -36,6 +36,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(RequisicaoInvalidaException.class)
+    public ProblemDetail handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Parâmetro inválido");
+        return problem;
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ProblemDetail handleTipoDeParametroInvalido(MethodArgumentTypeMismatchException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,

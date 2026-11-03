@@ -1,9 +1,11 @@
 package br.com.triboraizes.produtosapi.controller;
 
+import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -14,11 +16,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -33,9 +35,14 @@ public class ProdutoController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista todos os produtos")
-    public List<ProdutoResponseDTO> listarTodos() {
-        return produtoService.listarTodos();
+    @Operation(summary = "Lista os produtos com paginação, busca e ordenação")
+    public PaginaDTO<ProdutoResponseDTO> listar(
+            @Parameter(description = "Trecho do nome ou da descrição") @RequestParam(required = false) String busca,
+            @Parameter(description = "Índice da página, começando em 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Itens por página (1 a 500)") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "coluna,asc|desc. Colunas: nome, preco, quantidadeEmEstoque, criadoEm, atualizadoEm")
+            @RequestParam(defaultValue = "nome,asc") String sort) {
+        return produtoService.listar(busca, page, size, sort);
     }
 
     @GetMapping("/{id}")

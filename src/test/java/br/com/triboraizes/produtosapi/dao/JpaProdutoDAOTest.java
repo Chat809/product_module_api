@@ -14,6 +14,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @Import(DAOFactory.class)
@@ -63,15 +65,41 @@ class JpaProdutoDAOTest {
     }
 
     @Test
-    @DisplayName("Deve listar todos os produtos ordenados pelo nome")
-    void deveListarTodos() {
-        produtoDAO.salvar(novoProduto("Teclado"));
-        produtoDAO.salvar(novoProduto("Mouse"));
+    @DisplayName("Deve listar uma página de produtos na ordem pedida")
+    void deveListarPaginaOrdenada() {
+        produtoDAO.salvar(new Produto("Teclado", null, new BigDecimal("349.90"), 10));
+        produtoDAO.salvar(new Produto("Mouse", null, new BigDecimal("89.90"), 10));
+        produtoDAO.salvar(new Produto("Monitor", null, new BigDecimal("999.00"), 10));
         limparContexto();
 
-        assertThat(produtoDAO.listarTodos())
+        assertThat(produtoDAO.listar(null, 0, 2, "preco", false))
                 .extracting(Produto::getNome)
-                .containsExactly("Mouse", "Teclado");
+                .containsExactly("Monitor", "Teclado");
+        assertThat(produtoDAO.listar(null, 1, 2, "preco", false))
+                .extracting(Produto::getNome)
+                .containsExactly("Mouse");
+        assertThat(produtoDAO.contar(null)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Deve buscar pelo nome ou pela descrição sem diferenciar maiúsculas")
+    void deveBuscarPorNomeOuDescricao() {
+        produtoDAO.salvar(new Produto("Teclado mecânico", null, new BigDecimal("349.90"), 10));
+        produtoDAO.salvar(new Produto("Mouse", "Acompanha TECLADO numérico", new BigDecimal("89.90"), 10));
+        produtoDAO.salvar(new Produto("Monitor", "Tela 27 polegadas", new BigDecimal("999.00"), 10));
+        limparContexto();
+
+        assertThat(produtoDAO.listar("teclado", 0, 10, "nome", true))
+                .extracting(Produto::getNome)
+                .containsExactly("Mouse", "Teclado mecânico");
+        assertThat(produtoDAO.contar("teclado")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Deve recusar coluna de ordenação fora da lista permitida")
+    void deveRecusarColunaDeOrdenacaoNaoPermitida() {
+        assertThatThrownBy(() -> produtoDAO.listar(null, 0, 10, "id; drop table produtos", true))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

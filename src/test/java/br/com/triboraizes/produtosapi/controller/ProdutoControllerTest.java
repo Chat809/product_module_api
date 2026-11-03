@@ -1,8 +1,12 @@
 package br.com.triboraizes.produtosapi.controller;
 
+import br.com.triboraizes.produtosapi.dto.PaginaDTO;
+import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
+import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
+import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,15 +61,41 @@ class ProdutoControllerTest {
     private ProdutoService produtoService;
 
     @Test
-    @DisplayName("GET /produtos deve retornar 200 com a lista de produtos")
+    @DisplayName("GET /produtos deve retornar 200 com a primeira página ordenada por nome por padrão")
     void deveListarProdutos() throws Exception {
-        when(produtoService.listarTodos()).thenReturn(List.of(RESPONSE));
+        when(produtoService.listar(null, 0, 20, "nome,asc"))
+                .thenReturn(new PaginaDTO<>(List.of(RESPONSE), 0, 20, 1, 1));
 
         mockMvc.perform(get(URL))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value(ID.toString()))
-                .andExpect(jsonPath("$[0].nome").value("Teclado"));
+                .andExpect(jsonPath("$.conteudo", hasSize(1)))
+                .andExpect(jsonPath("$.conteudo[0].id").value(ID.toString()))
+                .andExpect(jsonPath("$.conteudo[0].versao").value(0))
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.totalPaginas").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /produtos deve repassar busca, página, tamanho e ordenação ao serviço")
+    void deveRepassarParametrosDeListagem() throws Exception {
+        when(produtoService.listar("teclado", 2, 5, "preco,desc"))
+                .thenReturn(new PaginaDTO<>(List.of(), 2, 5, 0, 0));
+
+        mockMvc.perform(get(URL).param("busca", "teclado").param("page", "2").param("size", "5").param("sort", "preco,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagina").value(2));
+    }
+
+    @Test
+    @DisplayName("GET /produtos deve retornar 400 quando um parâmetro de listagem for inválido")
+    void deveRetornar400EmParametroDeListagemInvalido() throws Exception {
+        when(produtoService.listar(null, 0, 1000, "nome,asc"))
+                .thenThrow(new RequisicaoInvalidaException("O parâmetro 'size' deve estar entre 1 e 500"));
+
+        mockMvc.perform(get(URL).param("size", "1000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
+                .andExpect(jsonPath("$.detail").value("O parâmetro 'size' deve estar entre 1 e 500"));
     }
 
     @Test
@@ -200,7 +230,7 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("Deve retornar 500 com mensagem genérica em erro inesperado")
     void deveRetornar500EmErroInesperado() throws Exception {
-        when(produtoService.listarTodos()).thenThrow(new IllegalStateException("falha interna"));
+        when(produtoService.listar(null, 0, 20, "nome,asc")).thenThrow(new IllegalStateException("falha interna"));
 
         mockMvc.perform(get(URL))
                 .andExpect(status().isInternalServerError())

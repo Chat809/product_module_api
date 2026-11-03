@@ -4,6 +4,7 @@ import br.com.triboraizes.produtosapi.model.Produto;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -12,12 +13,22 @@ import java.util.UUID;
  */
 public interface ProdutoDAO {
 
+    Set<String> COLUNAS_ORDENAVEIS = Set.of("nome", "preco", "quantidadeEmEstoque", "criadoEm", "atualizadoEm");
+
     /** Grava o produto e sincroniza com o banco, preenchendo id, datas e versão. */
     Produto salvar(Produto produto);
 
     Optional<Produto> buscarPorId(UUID id);
 
-    List<Produto> listarTodos();
+    /**
+     * Lista uma página de produtos.
+     *
+     * @param busca     trecho procurado no nome ou na descrição, sem diferenciar maiúsculas; {@code null} lista todos
+     * @param ordenarPor uma das {@link #COLUNAS_ORDENAVEIS}
+     */
+    List<Produto> listar(String busca, int pagina, int tamanho, String ordenarPor, boolean crescente);
+
+    long contar(String busca);
 
     /** Grava as alterações e sincroniza com o banco, atualizando a data e a versão. */
     Produto atualizar(Produto produto);

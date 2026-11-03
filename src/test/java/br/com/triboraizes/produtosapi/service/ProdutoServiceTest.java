@@ -1,15 +1,19 @@
 package br.com.triboraizes.produtosapi.service;
 
 import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
+import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
+import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
 import br.com.triboraizes.produtosapi.model.Produto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -155,28 +160,46 @@ class ProdutoServiceTest {
     }
 
     @Test
-    @DisplayName("Deve listar todos os produtos cadastrados")
-    void deveListarTodosOsProdutos() {
+    @DisplayName("Deve listar uma página de produtos com os totais calculados")
+    void deveListarPaginaDeProdutos() {
         // given
-        when(produtoDAO.listarTodos()).thenReturn(List.of(
+        when(produtoDAO.listar("tec", 1, 2, "preco", false)).thenReturn(List.of(
                 produtoComId(ID, "Teclado", null, "349.90", 25),
-                produtoComId(ID_2, "Mouse", null, "89.90", 10)));
+                produtoComId(ID_2, "Teclado gamer", null, "89.90", 10)));
+        when(produtoDAO.contar("tec")).thenReturn(5L);
 
         // when
-        List<ProdutoResponseDTO> response = produtoService.listarTodos();
+        PaginaDTO<ProdutoResponseDTO> pagina = produtoService.listar("  tec ", 1, 2, "preco,DESC");
 
         // then
-        assertThat(response).extracting(ProdutoResponseDTO::id).containsExactly(ID, ID_2);
+        assertThat(pagina.conteudo()).extracting(ProdutoResponseDTO::id).containsExactly(ID, ID_2);
+        assertThat(pagina.pagina()).isEqualTo(1);
+        assertThat(pagina.totalElementos()).isEqualTo(5);
+        assertThat(pagina.totalPaginas()).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("Deve retornar lista vazia quando não houver produtos")
-    void deveRetornarListaVaziaQuandoNaoHouverProdutos() {
+    @DisplayName("Deve listar todos os produtos quando a busca estiver em branco")
+    void deveIgnorarBuscaEmBranco() {
         // given
-        when(produtoDAO.listarTodos()).thenReturn(List.of());
+        when(produtoDAO.listar(null, 0, 20, "nome", true)).thenReturn(List.of());
+        when(produtoDAO.contar(null)).thenReturn(0L);
 
-        // when / then
-        assertThat(produtoService.listarTodos()).isEmpty();
+        // when
+        PaginaDTO<ProdutoResponseDTO> pagina = produtoService.listar(" ", 0, 20, "nome");
+
+        // then
+        assertThat(pagina.conteudo()).isEmpty();
+        assertThat(pagina.totalPaginas()).isZero();
+    }
+
+    @ParameterizedTest(name = "page={0}, size={1}, sort={2}")
+    @CsvSource(delimiter = ';', value = {"-1;20;nome,asc", "0;0;nome,asc", "0;501;nome,asc", "0;20;senha,asc", "0;20;nome,cima"})
+    @DisplayName("Deve recusar parâmetros de listagem inválidos sem consultar o banco")
+    void deveRecusarParametrosDeListagemInvalidos(int pagina, int tamanho, String ordenacao) {
+        assertThatThrownBy(() -> produtoService.listar(null, pagina, tamanho, ordenacao))
+                .isInstanceOf(RequisicaoInvalidaException.class);
+        verifyNoInteractions(produtoDAO);
     }
 
     private static Produto produtoComId(UUID id, String nome, String descricao, String preco, int quantidade) {
