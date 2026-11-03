@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -66,6 +68,58 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setTitle("Parâmetro inválido");
+        return problem;
+    }
+
+    @ExceptionHandler(CredenciaisInvalidasException.class)
+    public ProblemDetail handleCredenciaisInvalidas(CredenciaisInvalidasException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problem.setTitle("Credenciais inválidas");
+        return problem;
+    }
+
+    @ExceptionHandler(EmailJaCadastradoException.class)
+    public ProblemDetail handleEmailJaCadastrado(EmailJaCadastradoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("E-mail já cadastrado");
+        return problem;
+    }
+
+    @ExceptionHandler(UsuarioNaoEncontradoException.class)
+    public ProblemDetail handleUsuarioNaoEncontrado(UsuarioNaoEncontradoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Usuário não encontrado");
+        return problem;
+    }
+
+    @ExceptionHandler(OperacaoNaoPermitidaException.class)
+    public ProblemDetail handleOperacaoNaoPermitida(OperacaoNaoPermitidaException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Operação não permitida");
+        return problem;
+    }
+
+    @ExceptionHandler(ServicoDeUsuariosIndisponivelException.class)
+    public ProblemDetail handleServicoDeUsuariosIndisponivel(ServicoDeUsuariosIndisponivelException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        problem.setTitle("Serviço de usuários indisponível");
+        return problem;
+    }
+
+    /** Chamado pelo Spring Security (via {@code SecurityConfig}) quando falta o token ou ele é inválido. */
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail handleNaoAutenticado(AuthenticationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED,
+                "Faça login e envie o token no cabeçalho Authorization: Bearer <token>");
+        problem.setTitle("Não autenticado");
+        return problem;
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAcessoNegado(AccessDeniedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,
+                "Esta operação é restrita a administradores");
+        problem.setTitle("Acesso negado");
         return problem;
     }
 

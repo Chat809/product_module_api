@@ -49,6 +49,62 @@ final class ExemplosDeErro {
               "instance": "/api/v1/produtos/3f1c2b4e-8a6d-4e2f-9b1a-0c5d7e8f9a10/movimentacoes"
             }""";
 
+    static final String NAO_AUTENTICADO = """
+            {
+              "title": "Não autenticado",
+              "status": 401,
+              "detail": "Faça login e envie o token no cabeçalho Authorization: Bearer <token>",
+              "instance": "/api/v1/produtos"
+            }""";
+
+    static final String ACESSO_NEGADO = """
+            {
+              "title": "Acesso negado",
+              "status": 403,
+              "detail": "Esta operação é restrita a administradores",
+              "instance": "/api/v1/usuarios"
+            }""";
+
+    static final String CREDENCIAIS_INVALIDAS = """
+            {
+              "title": "Credenciais inválidas",
+              "status": 401,
+              "detail": "E-mail ou senha inválidos",
+              "instance": "/api/v1/auth/login"
+            }""";
+
+    static final String EMAIL_JA_CADASTRADO = """
+            {
+              "title": "E-mail já cadastrado",
+              "status": 409,
+              "detail": "Já existe uma conta com o e-mail maria@exemplo.com",
+              "instance": "/api/v1/auth/registro"
+            }""";
+
+    static final String USUARIO_NAO_ENCONTRADO = """
+            {
+              "title": "Usuário não encontrado",
+              "status": 404,
+              "detail": "Usuário com id 6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e não encontrado",
+              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e/papel"
+            }""";
+
+    static final String OPERACAO_NAO_PERMITIDA = """
+            {
+              "title": "Operação não permitida",
+              "status": 422,
+              "detail": "Você não pode remover o seu próprio acesso de administrador",
+              "instance": "/api/v1/usuarios/6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e/papel"
+            }""";
+
+    static final String SERVICO_INDISPONIVEL = """
+            {
+              "title": "Serviço de usuários indisponível",
+              "status": 503,
+              "detail": "Serviço de usuários indisponível. Tente novamente.",
+              "instance": "/api/v1/auth/login"
+            }""";
+
     private ExemplosDeErro() {
     }
 }
