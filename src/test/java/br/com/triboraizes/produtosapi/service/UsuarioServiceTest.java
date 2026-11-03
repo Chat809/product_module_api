@@ -43,6 +43,9 @@ class UsuarioServiceTest {
     @Mock
     private SupabaseAuthClient authClient;
 
+    @Mock
+    private AvatarService avatarService;
+
     @InjectMocks
     private UsuarioService usuarioService;
 
@@ -99,7 +102,7 @@ class UsuarioServiceTest {
     @DisplayName("Deve limitar os acessos sem chamar o Auth quando nome e e-mail não mudam")
     void deveAlterarAcessos() {
         when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
-        when(perfilDAO.atualizar(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard")))
+        when(perfilDAO.atualizar(OUTRO, dados("Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"))))
                 .thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO, List.of("dashboard"))));
 
         UsuarioDTO usuario = usuarioService.atualizar(OUTRO,
@@ -113,7 +116,7 @@ class UsuarioServiceTest {
     @DisplayName("Deve normalizar e enviar ao Auth o novo nome e e-mail")
     void deveAlterarNomeEEmail() {
         when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
-        when(perfilDAO.atualizar(OUTRO, "Maria Souza", "nova@exemplo.com", Papel.USUARIO, List.of("*")))
+        when(perfilDAO.atualizar(OUTRO, dados("Maria Souza", "nova@exemplo.com", Papel.USUARIO, List.of("*"))))
                 .thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO, List.of("*"))));
 
         usuarioService.atualizar(OUTRO,
@@ -126,7 +129,7 @@ class UsuarioServiceTest {
     @DisplayName("Promover a ADMIN grava acesso total")
     void devePromoverComAcessoTotal() {
         when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
-        when(perfilDAO.atualizar(OUTRO, "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*")))
+        when(perfilDAO.atualizar(OUTRO, dados("Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*"))))
                 .thenReturn(Optional.of(perfil(OUTRO, Papel.ADMIN, List.of("*"))));
 
         UsuarioDTO usuario = usuarioService.atualizar(OUTRO,
@@ -168,7 +171,7 @@ class UsuarioServiceTest {
     @DisplayName("Deve lançar 404 se o perfil sumir entre a leitura e a gravação")
     void deveLancarSeSumirNaGravacao() {
         when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
-        when(perfilDAO.atualizar(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*")))
+        when(perfilDAO.atualizar(OUTRO, dados("Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*"))))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> usuarioService.atualizar(OUTRO,
@@ -180,7 +183,7 @@ class UsuarioServiceTest {
     @DisplayName("Opções de responsável expõem só id, nome e avatar")
     void deveListarOpcoes() {
         when(perfilDAO.listarOpcoes()).thenReturn(List.of(
-                new Perfil(OUTRO, "Maria", null, null, null, null, null, null, null, "https://x/a.png")));
+                new Perfil(OUTRO, "Maria", null, null, null, null, null, null, null, "https://x/a.png", null)));
 
         assertThat(usuarioService.opcoes()).containsExactly(new UsuarioOpcaoDTO(OUTRO, "Maria", "https://x/a.png"));
     }
@@ -193,7 +196,42 @@ class UsuarioServiceTest {
         verify(authClient).redefinirSenha(OUTRO, "novaSenha1");
     }
 
+    @Test
+    @DisplayName("Deve gravar departamento e cargo aparados; vazios viram null")
+    void deveGravarDepartamentoECargo() {
+        when(perfilDAO.buscarPorId(OUTRO)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
+        PerfilDAO.DadosDoUsuario esperado = new PerfilDAO.DadosDoUsuario(
+                "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*"), "Tecnologia", null);
+        when(perfilDAO.atualizar(OUTRO, esperado)).thenReturn(Optional.of(perfil(OUTRO, Papel.USUARIO)));
+
+        usuarioService.atualizar(OUTRO, new AtualizarUsuarioRequestDTO(
+                "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*"), " Tecnologia ", "  "), ADMIN);
+
+        verify(perfilDAO).atualizar(OUTRO, esperado);
+    }
+
+    @Test
+    @DisplayName("Deve trocar e remover a foto de outro usuário pelo serviço de avatar")
+    void deveTrocarERemoverAvatar() {
+        byte[] png = {1, 2, 3};
+        Perfil comFoto = new Perfil(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("*"), CRIADO,
+                null, "Desenvolvedora", null, "https://x/a.png", "Tecnologia");
+        when(avatarService.trocar(OUTRO, png)).thenReturn(comFoto);
+        when(avatarService.remover(OUTRO)).thenReturn(perfil(OUTRO, Papel.USUARIO));
+
+        UsuarioDTO comAvatar = usuarioService.trocarAvatar(OUTRO, png, ADMIN);
+
+        assertThat(comAvatar.avatarUrl()).isEqualTo("https://x/a.png");
+        assertThat(comAvatar.departamento()).isEqualTo("Tecnologia");
+        assertThat(comAvatar.funcao()).isEqualTo("Desenvolvedora");
+        assertThat(usuarioService.removerAvatar(OUTRO, ADMIN).avatarUrl()).isNull();
+    }
+
     private static AtualizarUsuarioRequestDTO pedido(String nome, String email, Papel papel, List<String> acessos) {
-        return new AtualizarUsuarioRequestDTO(nome, email, papel, acessos);
+        return new AtualizarUsuarioRequestDTO(nome, email, papel, acessos, null, null);
+    }
+
+    private static PerfilDAO.DadosDoUsuario dados(String nome, String email, Papel papel, List<String> acessos) {
+        return new PerfilDAO.DadosDoUsuario(nome, email, papel, acessos, null, null);
     }
 }

@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
@@ -32,7 +34,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -46,9 +50,10 @@ class UsuarioControllerTest {
     private static final UUID ADMIN = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OUTRO = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UsuarioDTO USUARIO = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
-            List.of("dashboard", "produtos"), Instant.parse("2026-11-03T08:00:00Z"), null);
+            List.of("dashboard", "produtos"), Instant.parse("2026-11-03T08:00:00Z"), null, "Tecnologia", "Desenvolvedora");
     private static final String EDICAO = """
-            {"nome": "Maria", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"]}
+            {"nome": "Maria", "email": "maria@exemplo.com", "papel": "USUARIO", "acessos": ["dashboard"],
+             "departamento": "Tecnologia", "funcao": "Desenvolvedora"}
             """;
 
     @Autowired
@@ -117,16 +122,18 @@ class UsuarioControllerTest {
         mockMvc.perform(get(URL).with(comoAdmin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conteudo", hasSize(1)))
-                .andExpect(jsonPath("$.conteudo[0].criadoEm").value("2026-11-03T08:00:00Z"));
+                .andExpect(jsonPath("$.conteudo[0].criadoEm").value("2026-11-03T08:00:00Z"))
+                .andExpect(jsonPath("$.conteudo[0].departamento").value("Tecnologia"))
+                .andExpect(jsonPath("$.conteudo[0].funcao").value("Desenvolvedora"));
     }
 
     @Test
     @DisplayName("PUT /{id} deve repassar os dados e o id do admin logado")
     void deveAtualizar() throws Exception {
         AtualizarUsuarioRequestDTO pedido = new AtualizarUsuarioRequestDTO(
-                "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"));
+                "Maria", "maria@exemplo.com", Papel.USUARIO, List.of("dashboard"), "Tecnologia", "Desenvolvedora");
         UsuarioDTO atualizado = new UsuarioDTO(OUTRO, "Maria", "maria@exemplo.com", Papel.USUARIO,
-                List.of("dashboard"), null, null);
+                List.of("dashboard"), null, null, "Tecnologia", "Desenvolvedora");
         when(usuarioService.atualizar(OUTRO, pedido, ADMIN)).thenReturn(atualizado);
 
         mockMvc.perform(put(URL + "/" + OUTRO).with(comoAdmin())
@@ -190,6 +197,33 @@ class UsuarioControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(put(URL + "/" + OUTRO + "/senha").with(comoUsuario())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"senha\": \"novaSenha1\"}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(usuarioService);
+    }
+
+    @Test
+    @DisplayName("PUT e DELETE /{id}/avatar devem trocar e remover a foto de outro usuário (ADMIN)")
+    void deveTrocarERemoverAvatarDeOutro() throws Exception {
+        byte[] conteudo = {(byte) 0x89, 'P', 'N', 'G'};
+        when(usuarioService.trocarAvatar(OUTRO, conteudo, ADMIN)).thenReturn(USUARIO);
+        when(usuarioService.removerAvatar(OUTRO, ADMIN)).thenReturn(USUARIO);
+
+        mockMvc.perform(multipart(HttpMethod.PUT, URL + "/" + OUTRO + "/avatar")
+                        .file(new MockMultipartFile("arquivo", "a.png", "image/png", conteudo)).with(comoAdmin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Maria"));
+        mockMvc.perform(delete(URL + "/" + OUTRO + "/avatar").with(comoAdmin()))
+                .andExpect(status().isOk());
+
+        verify(usuarioService).removerAvatar(OUTRO, ADMIN);
+    }
+
+    @Test
+    @DisplayName("PUT /{id}/avatar deve bloquear quem não é ADMIN")
+    void deveRestringirAvatarDeOutroAoAdmin() throws Exception {
+        mockMvc.perform(multipart(HttpMethod.PUT, URL + "/" + ADMIN + "/avatar")
+                        .file(new MockMultipartFile("arquivo", "a.png", "image/png", new byte[]{1})).with(comoUsuario()))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(usuarioService);

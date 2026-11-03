@@ -56,8 +56,9 @@ public class MeuPerfilController {
     }
 
     @PutMapping
-    @Operation(summary = "Edita nome, telefone, função e bio do próprio usuário",
-            description = "E-mail, papel e acessos não são editáveis aqui: só um administrador os altera.")
+    @Operation(summary = "Edita nome, telefone e bio do próprio usuário",
+            description = "E-mail, nível de acesso, acessos, departamento e cargo não são editáveis aqui: "
+                    + "só um administrador os altera.")
     @ApiResponse(responseCode = "200", description = "Perfil atualizado")
     @ApiResponse(responseCode = "400", description = "Campos inválidos",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),

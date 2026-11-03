@@ -3,7 +3,6 @@ package br.com.triboraizes.produtosapi.dao;
 import br.com.triboraizes.produtosapi.client.FalhaDoSupabase;
 import br.com.triboraizes.produtosapi.config.SupabaseProperties;
 import br.com.triboraizes.produtosapi.exception.ServicoDeUsuariosIndisponivelException;
-import br.com.triboraizes.produtosapi.model.Papel;
 import br.com.triboraizes.produtosapi.model.Perfil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,7 @@ public class SupabasePerfilDAO implements PerfilDAO {
     private static final Logger log = LoggerFactory.getLogger(SupabasePerfilDAO.class);
 
     private static final String TABELA = "/rest/v1/perfis";
-    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em,telefone,funcao,bio,avatar_url";
+    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em,telefone,funcao,bio,avatar_url,departamento";
     private static final ParameterizedTypeReference<List<Perfil>> LISTA = new ParameterizedTypeReference<>() {
     };
 
@@ -78,16 +77,22 @@ public class SupabasePerfilDAO implements PerfilDAO {
     }
 
     @Override
-    public Optional<Perfil> atualizar(UUID id, String nome, String email, Papel papel, List<String> acessos) {
-        return gravar(id, Map.of("nome", nome, "email", email, "papel", papel.name(), "acessos", acessos));
+    public Optional<Perfil> atualizar(UUID id, DadosDoUsuario usuario) {
+        Map<String, Object> dados = new HashMap<>();
+        dados.put("nome", usuario.nome());
+        dados.put("email", usuario.email());
+        dados.put("papel", usuario.papel().name());
+        dados.put("acessos", usuario.acessos());
+        dados.put("departamento", usuario.departamento());
+        dados.put("funcao", usuario.cargo());
+        return gravar(id, dados);
     }
 
     @Override
-    public Optional<Perfil> atualizarDadosProprios(UUID id, String nome, String telefone, String funcao, String bio) {
+    public Optional<Perfil> atualizarDadosProprios(UUID id, String nome, String telefone, String bio) {
         Map<String, Object> dados = new HashMap<>();
         dados.put("nome", nome);
         dados.put("telefone", telefone);
-        dados.put("funcao", funcao);
         dados.put("bio", bio);
         return gravar(id, dados);
     }

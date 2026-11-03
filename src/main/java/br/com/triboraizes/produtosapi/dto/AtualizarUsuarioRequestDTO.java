@@ -24,8 +24,8 @@ public record AtualizarUsuarioRequestDTO(
         @Size(max = 254, message = "O e-mail deve ter no máximo 254 caracteres")
         String email,
 
-        @Schema(example = "USUARIO")
-        @NotNull(message = "O papel é obrigatório")
+        @Schema(description = "Nível de acesso no sistema", example = "USUARIO")
+        @NotNull(message = "O nível de acesso é obrigatório")
         Papel papel,
 
         @ArraySchema(arraySchema = @Schema(
@@ -33,6 +33,14 @@ public record AtualizarUsuarioRequestDTO(
                         + "Ignorado para ADMIN, que sempre tem acesso total.",
                 example = "[\"dashboard\", \"produtos\"]"))
         @NotNull(message = "Os acessos são obrigatórios")
-        List<String> acessos
+        List<String> acessos,
+
+        @Schema(description = "Departamento na empresa; vazio limpa", example = "Tecnologia", nullable = true)
+        @Size(max = 80, message = "O departamento deve ter no máximo 80 caracteres")
+        String departamento,
+
+        @Schema(description = "Cargo na empresa; vazio limpa", example = "Desenvolvedor", nullable = true)
+        @Size(max = 80, message = "O cargo deve ter no máximo 80 caracteres")
+        String funcao
 ) {
 }

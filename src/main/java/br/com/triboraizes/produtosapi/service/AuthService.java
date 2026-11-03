@@ -77,7 +77,7 @@ public class AuthService {
         String nome = nomeDe(dados, user.email());
         Papel papel = Papel.de(app.get("papel"));
         UsuarioDTO usuario = new UsuarioDTO(user.id(), nome, user.email(), papel,
-                Acessos.de(app.get("acessos"), papel), null, null);
+                Acessos.de(app.get("acessos"), papel), null, null, null, null);
         return new SessaoDTO(sessao.accessToken(), sessao.refreshToken(), Instant.ofEpochSecond(sessao.expiresAt()), usuario);
     }
 }

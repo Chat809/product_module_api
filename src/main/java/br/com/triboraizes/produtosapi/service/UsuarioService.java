@@ -29,10 +29,12 @@ public class UsuarioService {
 
     private final PerfilDAO perfilDAO;
     private final SupabaseAuthClient authClient;
+    private final AvatarService avatarService;
 
-    public UsuarioService(PerfilDAO perfilDAO, SupabaseAuthClient authClient) {
+    public UsuarioService(PerfilDAO perfilDAO, SupabaseAuthClient authClient, AvatarService avatarService) {
         this.perfilDAO = perfilDAO;
         this.authClient = authClient;
+        this.avatarService = avatarService;
     }
 
     public UsuarioDTO buscar(UUID id) {
@@ -67,7 +69,9 @@ public class UsuarioService {
         if (!nome.equals(atual.nome()) || !email.equals(atual.email())) {
             authClient.atualizarDados(id, nome, email);
         }
-        UsuarioDTO atualizado = perfilDAO.atualizar(id, nome, email, request.papel(), acessos)
+        PerfilDAO.DadosDoUsuario dados = new PerfilDAO.DadosDoUsuario(nome, email, request.papel(), acessos,
+                opcional(request.departamento()), opcional(request.funcao()));
+        UsuarioDTO atualizado = perfilDAO.atualizar(id, dados)
                 .map(UsuarioDTO::from)
                 .orElseThrow(() -> new UsuarioNaoEncontradoException(id));
         log.info("Usuário atualizado: usuario={}, papel={}, acessos={}, por={}", id, request.papel(), acessos, solicitante);
@@ -79,7 +83,23 @@ public class UsuarioService {
         log.info("Senha redefinida: usuario={}, por={}", id, solicitante);
     }
 
+    public UsuarioDTO trocarAvatar(UUID id, byte[] conteudo, UUID solicitante) {
+        UsuarioDTO atualizado = UsuarioDTO.from(avatarService.trocar(id, conteudo));
+        log.info("Avatar definido pelo admin: usuario={}, por={}", id, solicitante);
+        return atualizado;
+    }
+
+    public UsuarioDTO removerAvatar(UUID id, UUID solicitante) {
+        UsuarioDTO atualizado = UsuarioDTO.from(avatarService.remover(id));
+        log.info("Avatar removido pelo admin: usuario={}, por={}", id, solicitante);
+        return atualizado;
+    }
+
     private Perfil perfil(UUID id) {
         return perfilDAO.buscarPorId(id).orElseThrow(() -> new UsuarioNaoEncontradoException(id));
+    }
+
+    private static String opcional(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
     }
 }

@@ -39,3 +39,6 @@ build/
 .env.*
 .cursor/
 *.zip
+
+### Fotos pessoais usadas só para gerar avatares ###
+*.jfif

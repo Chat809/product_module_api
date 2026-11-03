@@ -15,25 +15,32 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ACESSO_INVALIDO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ACESSO_NEGADO;
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.ARQUIVO_GRANDE;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.DADOS_INVALIDOS;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.EMAIL_JA_CADASTRADO;
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.IMAGEM_INVALIDA;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.NAO_AUTENTICADO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.OPERACAO_NAO_PERMITIDA;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.PROBLEM_JSON;
@@ -77,7 +84,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Edita nome, e-mail, papel e acessos de um usuário (somente ADMIN)",
+    @Operation(summary = "Edita nome, e-mail, nível de acesso, acessos, departamento e cargo de um usuário (somente ADMIN)",
             description = "Acessos: [\"*\"] libera todos os módulos; uma lista como [\"dashboard\"] limita aos módulos "
                     + "indicados. ADMIN sempre fica com [\"*\"] e o módulo 'usuarios' é exclusivo de ADMIN. "
                     + "O usuário afetado recebe o novo papel e os novos acessos no próximo login ou renovação de sessão.")
@@ -121,5 +128,37 @@ public class UsuarioController {
                                @Valid @RequestBody RedefinirSenhaRequestDTO request,
                                @AuthenticationPrincipal Jwt jwt) {
         usuarioService.redefinirSenha(id, request.senha(), UUID.fromString(jwt.getSubject()));
+    }
+
+    @PutMapping(path = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Define a foto de um usuário (somente ADMIN; PNG, JPEG ou WEBP, até 2 MB)",
+            description = "Mesmas regras de PUT /api/v1/usuarios/me/avatar. A imagem anterior é apagada do Storage.")
+    @ApiResponse(responseCode = "200", description = "Foto atualizada; a URL pública vem em avatarUrl")
+    @ApiResponse(responseCode = "400", description = "Arquivo ausente ou formato não suportado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = IMAGEM_INVALIDA)))
+    @ApiResponse(responseCode = "403", description = "Usuário sem papel ADMIN",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ACESSO_NEGADO)))
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = USUARIO_NAO_ENCONTRADO)))
+    @ApiResponse(responseCode = "413", description = "Arquivo maior que 2 MB",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = ARQUIVO_GRANDE)))
+    public UsuarioDTO trocarAvatar(@PathVariable UUID id,
+                                   @Parameter(description = "Imagem da foto") @RequestPart("arquivo") MultipartFile arquivo,
+                                   @AuthenticationPrincipal Jwt jwt) throws IOException {
+        return usuarioService.trocarAvatar(id, arquivo.getBytes(), UUID.fromString(jwt.getSubject()));
+    }
+
+    @DeleteMapping("/{id}/avatar")
+    @Operation(summary = "Remove a foto de um usuário (somente ADMIN)")
+    @ApiResponse(responseCode = "200", description = "Foto removida")
+    @ApiResponse(responseCode = "404", description = "Usuário não encontrado",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = USUARIO_NAO_ENCONTRADO)))
+    public UsuarioDTO removerAvatar(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        return usuarioService.removerAvatar(id, UUID.fromString(jwt.getSubject()));
     }
 }

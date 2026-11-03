@@ -21,15 +21,18 @@ public record MeuPerfilDTO(
         List<String> acessos,
         Instant criadoEm,
         @Schema(example = "(11) 99999-0000", nullable = true) String telefone,
-        @Schema(example = "Analista de compras", nullable = true) String funcao,
+        @Schema(description = "Cargo; somente leitura, definido pelo admin", example = "Desenvolvedor", nullable = true)
+        String funcao,
         @Schema(example = "Cuido do estoque e das compras.", nullable = true) String bio,
-        @Schema(nullable = true) String avatarUrl
+        @Schema(nullable = true) String avatarUrl,
+        @Schema(description = "Somente leitura, definido pelo admin", example = "Tecnologia", nullable = true)
+        String departamento
 ) {
 
     public static MeuPerfilDTO from(Perfil perfil) {
         Instant criadoEm = perfil.criadoEm() == null ? null : perfil.criadoEm().toInstant();
         return new MeuPerfilDTO(perfil.id(), perfil.nome(), perfil.email(), perfil.papel(),
                 Acessos.de(perfil.acessos(), perfil.papel()), criadoEm,
-                perfil.telefone(), perfil.funcao(), perfil.bio(), perfil.avatarUrl());
+                perfil.telefone(), perfil.funcao(), perfil.bio(), perfil.avatarUrl(), perfil.departamento());
     }
 }

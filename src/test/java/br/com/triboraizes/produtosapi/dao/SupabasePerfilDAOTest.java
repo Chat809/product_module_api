@@ -34,7 +34,7 @@ class SupabasePerfilDAOTest {
 
     private static final String URL = "https://projeto.supabase.co";
     private static final String TABELA = URL + "/rest/v1/perfis";
-    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em,telefone,funcao,bio,avatar_url";
+    private static final String COLUNAS = "id,nome,email,papel,acessos,criado_em,telefone,funcao,bio,avatar_url,departamento";
     private static final UUID ID = UUID.fromString("6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e");
     private static final String PERFIL_JSON = """
             [{"id": "6f1c2b0e-3d4a-4b5c-8d9e-0f1a2b3c4d5e", "nome": "Maria", "email": "maria@exemplo.com",
@@ -106,18 +106,20 @@ class SupabasePerfilDAOTest {
     }
 
     @Test
-    @DisplayName("Deve gravar nome, e-mail, papel e acessos (como array JSON) e devolver o perfil gravado")
+    @DisplayName("Deve gravar nome, e-mail, papel, acessos (array JSON), departamento e cargo (coluna funcao)")
     void deveAtualizar() {
         servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS + ""))
                 .andExpect(method(PATCH))
                 .andExpect(header("Prefer", "return=representation"))
                 .andExpect(content().json("""
-                        {"nome": "Maria", "email": "maria@exemplo.com", "papel": "ADMIN", "acessos": ["*"]}
+                        {"nome": "Maria", "email": "maria@exemplo.com", "papel": "ADMIN", "acessos": ["*"],
+                         "departamento": "Tecnologia", "funcao": null}
                         """, JsonCompareMode.STRICT))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
 
-        assertThat(dao.atualizar(ID, "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*")))
-                .get().extracting(Perfil::papel).isEqualTo(Papel.ADMIN);
+        PerfilDAO.DadosDoUsuario dados = new PerfilDAO.DadosDoUsuario(
+                "Maria", "maria@exemplo.com", Papel.ADMIN, List.of("*"), "Tecnologia", null);
+        assertThat(dao.atualizar(ID, dados)).get().extracting(Perfil::papel).isEqualTo(Papel.ADMIN);
     }
 
     @Test
@@ -126,11 +128,11 @@ class SupabasePerfilDAOTest {
         servidor.expect(requestTo(TABELA + "?id=eq." + ID + "&select=" + COLUNAS))
                 .andExpect(method(PATCH))
                 .andExpect(content().json("""
-                        {"nome": "Maria", "telefone": null, "funcao": "Compras", "bio": null}
+                        {"nome": "Maria", "telefone": null, "bio": "Compras"}
                         """, JsonCompareMode.STRICT))
                 .andRespond(withSuccess(PERFIL_JSON, MediaType.APPLICATION_JSON));
 
-        assertThat(dao.atualizarDadosProprios(ID, "Maria", null, "Compras", null)).isPresent();
+        assertThat(dao.atualizarDadosProprios(ID, "Maria", null, "Compras")).isPresent();
     }
 
     @Test

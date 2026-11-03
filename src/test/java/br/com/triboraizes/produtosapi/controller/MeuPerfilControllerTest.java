@@ -43,7 +43,7 @@ class MeuPerfilControllerTest {
     private static final String URL = "/api/v1/usuarios/me";
     private static final UUID ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final MeuPerfilDTO PERFIL = new MeuPerfilDTO(ID, "Maria", "maria@exemplo.com", Papel.USUARIO,
-            List.of("dashboard"), null, "(11) 9999-0000", "Compras", null, "https://x/a.png");
+            List.of("dashboard"), null, "(11) 9999-0000", "Compradora", null, "https://x/a.png", "Compras");
 
     @Autowired
     private MockMvc mockMvc;
@@ -81,18 +81,20 @@ class MeuPerfilControllerTest {
     }
 
     @Test
-    @DisplayName("PUT deve repassar os dados e ignorar e-mail, papel e acessos enviados")
+    @DisplayName("PUT deve repassar os dados e ignorar e-mail, papel, acessos, cargo e departamento enviados")
     void deveAtualizar() throws Exception {
-        when(meuPerfilService.atualizar(ID, new AtualizarMeuPerfilRequestDTO("Maria", "(11) 9999-0000", "Compras", null)))
+        when(meuPerfilService.atualizar(ID, new AtualizarMeuPerfilRequestDTO("Maria", "(11) 9999-0000", null)))
                 .thenReturn(PERFIL);
 
         mockMvc.perform(put(URL).with(semModulos()).contentType(MediaType.APPLICATION_JSON).content("""
-                        {"nome": "Maria", "telefone": "(11) 9999-0000", "funcao": "Compras",
+                        {"nome": "Maria", "telefone": "(11) 9999-0000", "funcao": "Diretora", "departamento": "Diretoria",
                          "email": "outro@exemplo.com", "papel": "ADMIN", "acessos": ["*"]}
                         """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("maria@exemplo.com"))
-                .andExpect(jsonPath("$.papel").value("USUARIO"));
+                .andExpect(jsonPath("$.papel").value("USUARIO"))
+                .andExpect(jsonPath("$.funcao").value("Compradora"))
+                .andExpect(jsonPath("$.departamento").value("Compras"));
     }
 
     @Test

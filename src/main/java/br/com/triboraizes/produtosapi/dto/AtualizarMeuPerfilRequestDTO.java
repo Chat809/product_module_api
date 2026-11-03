@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-@Schema(description = "Dados que o próprio usuário pode editar. E-mail, papel e acessos ficam com o administrador.")
+@Schema(description = "Dados que o próprio usuário pode editar. E-mail, nível de acesso, acessos, departamento e cargo ficam com o administrador.")
 public record AtualizarMeuPerfilRequestDTO(
 
         @Schema(example = "Maria Souza")
@@ -17,10 +17,6 @@ public record AtualizarMeuPerfilRequestDTO(
         @Size(max = 20, message = "O telefone deve ter no máximo 20 caracteres")
         @Pattern(regexp = "^[0-9()+\\-\\s]*$", message = "O telefone só pode ter números, espaços, parênteses, + e -")
         String telefone,
-
-        @Schema(example = "Analista de compras", nullable = true)
-        @Size(max = 80, message = "A função deve ter no máximo 80 caracteres")
-        String funcao,
 
         @Schema(example = "Cuido do estoque e das compras.", nullable = true)
         @Size(max = 500, message = "A bio deve ter no máximo 500 caracteres")
