@@ -1,6 +1,8 @@
 package br.com.triboraizes.produtosapi.factory;
 
+import br.com.triboraizes.produtosapi.dao.JpaMovimentacaoDAO;
 import br.com.triboraizes.produtosapi.dao.JpaProdutoDAO;
+import br.com.triboraizes.produtosapi.dao.MovimentacaoDAO;
 import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
@@ -20,5 +22,9 @@ public class DAOFactory {
 
     public ProdutoDAO criarProdutoDAO() {
         return new JpaProdutoDAO(entityManager);
+    }
+
+    public MovimentacaoDAO criarMovimentacaoDAO() {
+        return new JpaMovimentacaoDAO(entityManager);
     }
 }

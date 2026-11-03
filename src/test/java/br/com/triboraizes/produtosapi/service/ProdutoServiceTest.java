@@ -1,5 +1,6 @@
 package br.com.triboraizes.produtosapi.service;
 
+import br.com.triboraizes.produtosapi.dao.MovimentacaoDAO;
 import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
@@ -8,7 +9,9 @@ import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
+import br.com.triboraizes.produtosapi.model.MovimentacaoEstoque;
 import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.TipoMovimentacao;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -28,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -46,11 +51,15 @@ class ProdutoServiceTest {
     @Mock
     private ProdutoDAO produtoDAO;
 
+    @Mock
+    private MovimentacaoDAO movimentacaoDAO;
+
     private ProdutoService produtoService;
 
     @BeforeEach
     void setUp() {
         when(daoFactory.criarProdutoDAO()).thenReturn(produtoDAO);
+        when(daoFactory.criarMovimentacaoDAO()).thenReturn(movimentacaoDAO);
         produtoService = new ProdutoService(daoFactory);
     }
 
@@ -92,6 +101,72 @@ class ProdutoServiceTest {
         assertThat(response).extracting(ProdutoResponseDTO::id, ProdutoResponseDTO::nome, ProdutoResponseDTO::descricao, ProdutoResponseDTO::preco, ProdutoResponseDTO::quantidadeEmEstoque)
                 .containsExactly(ID, "Mouse", "Sem fio", new BigDecimal("89.90"), 10);
         verify(produtoDAO).atualizar(existente);
+    }
+
+    @Test
+    @DisplayName("Deve registrar a entrada do estoque inicial ao criar um produto com quantidade")
+    void deveRegistrarEstoqueInicialAoCriar() {
+        // given
+        when(produtoDAO.salvar(any(Produto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        produtoService.criar(new ProdutoRequestDTO("Teclado", null, new BigDecimal("349.90"), 25, null));
+
+        // then
+        ArgumentCaptor<MovimentacaoEstoque> captor = ArgumentCaptor.forClass(MovimentacaoEstoque.class);
+        verify(movimentacaoDAO).salvar(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(MovimentacaoEstoque::getTipo, MovimentacaoEstoque::getQuantidade,
+                        MovimentacaoEstoque::getSaldoAnterior, MovimentacaoEstoque::getSaldoApos)
+                .containsExactly(TipoMovimentacao.ENTRADA, 25, 0, 25);
+    }
+
+    @Test
+    @DisplayName("Não deve registrar movimentação ao criar um produto sem estoque")
+    void naoDeveRegistrarMovimentacaoAoCriarSemEstoque() {
+        // given
+        when(produtoDAO.salvar(any(Produto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        produtoService.criar(new ProdutoRequestDTO("Teclado", null, new BigDecimal("349.90"), 0, null));
+
+        // then
+        verifyNoInteractions(movimentacaoDAO);
+    }
+
+    @Test
+    @DisplayName("Deve registrar um ajuste quando a edição alterar a quantidade em estoque")
+    void deveRegistrarAjusteAoAlterarQuantidade() {
+        // given
+        Produto existente = produtoComId(ID, "Teclado", null, "100.00", 10);
+        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(existente));
+        when(produtoDAO.atualizar(existente)).thenReturn(existente);
+
+        // when
+        produtoService.atualizar(ID, new ProdutoRequestDTO("Teclado", null, new BigDecimal("100.00"), 4, null));
+
+        // then
+        ArgumentCaptor<MovimentacaoEstoque> captor = ArgumentCaptor.forClass(MovimentacaoEstoque.class);
+        verify(movimentacaoDAO).salvar(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(MovimentacaoEstoque::getTipo, MovimentacaoEstoque::getQuantidade,
+                        MovimentacaoEstoque::getSaldoAnterior, MovimentacaoEstoque::getSaldoApos)
+                .containsExactly(TipoMovimentacao.AJUSTE, 6, 10, 4);
+    }
+
+    @Test
+    @DisplayName("Não deve registrar ajuste quando a edição mantiver a quantidade em estoque")
+    void naoDeveRegistrarAjusteSemAlterarQuantidade() {
+        // given
+        Produto existente = produtoComId(ID, "Teclado", null, "100.00", 10);
+        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(existente));
+        when(produtoDAO.atualizar(existente)).thenReturn(existente);
+
+        // when
+        produtoService.atualizar(ID, new ProdutoRequestDTO("Teclado RGB", null, new BigDecimal("120.00"), 10, null));
+
+        // then
+        verifyNoInteractions(movimentacaoDAO);
     }
 
     @Test
@@ -150,7 +225,9 @@ class ProdutoServiceTest {
         produtoService.remover(ID);
 
         // then
-        verify(produtoDAO).remover(existente);
+        InOrder ordem = inOrder(movimentacaoDAO, produtoDAO);
+        ordem.verify(movimentacaoDAO).removerPorProduto(existente);
+        ordem.verify(produtoDAO).remover(existente);
     }
 
     @Test

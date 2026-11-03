@@ -38,6 +38,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(EstoqueInsuficienteException.class)
+    public ProblemDetail handleEstoqueInsuficiente(EstoqueInsuficienteException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Estoque insuficiente");
+        return problem;
+    }
+
     @ExceptionHandler(ConflitoDeVersaoException.class)
     public ProblemDetail handleConflitoDeVersao(ConflitoDeVersaoException ex) {
         return conflitoDeEdicao(ex.getMessage());

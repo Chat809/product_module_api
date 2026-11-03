@@ -1,5 +1,6 @@
 package br.com.triboraizes.produtosapi.model;
 
+import br.com.triboraizes.produtosapi.exception.EstoqueInsuficienteException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -59,6 +60,25 @@ public class Produto {
         this.descricao = strip(descricao);
         this.preco = preco == null ? null : preco.setScale(2, RoundingMode.HALF_UP);
         this.quantidadeEmEstoque = quantidadeEmEstoque;
+    }
+
+    public void registrarEntrada(int quantidade) {
+        exigirPositiva(quantidade);
+        this.quantidadeEmEstoque += quantidade;
+    }
+
+    public void registrarSaida(int quantidade) {
+        exigirPositiva(quantidade);
+        if (quantidade > quantidadeEmEstoque) {
+            throw new EstoqueInsuficienteException(quantidadeEmEstoque, quantidade);
+        }
+        this.quantidadeEmEstoque -= quantidade;
+    }
+
+    private static void exigirPositiva(int quantidade) {
+        if (quantidade <= 0) {
+            throw new IllegalArgumentException("A quantidade movimentada deve ser maior que zero");
+        }
     }
 
     private static String strip(String valor) {
