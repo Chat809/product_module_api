@@ -1,5 +1,6 @@
 package br.com.triboraizes.produtosapi.controller;
 
+import br.com.triboraizes.produtosapi.config.SecurityConfig;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
@@ -12,8 +13,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -42,7 +47,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ProdutoController.class)
+@Import(SecurityConfig.class)
+@WithMockUser
 class ProdutoControllerTest {
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     private static final String URL = "/api/v1/produtos";
 
@@ -309,6 +319,30 @@ class ProdutoControllerTest {
         mockMvc.perform(get(URL + "/" + ID).header("Origin", "http://localhost:4200"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Expose-Headers", containsString("ETag")));
+    }
+
+    @Test
+    @WithAnonymousUser
+    @DisplayName("Deve responder 401 em ProblemDetail quando não houver token")
+    void deveExigirAutenticacao() throws Exception {
+        mockMvc.perform(get(URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Não autenticado"));
+
+        verifyNoInteractions(produtoService);
+    }
+
+    @Test
+    @WithAnonymousUser
+    @DisplayName("O preflight CORS deve funcionar sem token")
+    void devePermitirPreflightSemToken() throws Exception {
+        mockMvc.perform(options(URL)
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "PUT")
+                        .header("Access-Control-Request-Headers", "authorization,if-match"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package br.com.triboraizes.produtosapi.controller;
 
+import br.com.triboraizes.produtosapi.config.SecurityConfig;
 import br.com.triboraizes.produtosapi.dto.MovimentacaoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.MovimentacaoResponseDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
@@ -10,7 +11,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,7 +33,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(MovimentacaoController.class)
+@Import(SecurityConfig.class)
+@WithMockUser
 class MovimentacaoControllerTest {
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     private static final UUID PRODUTO_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final String URL = "/api/v1/produtos/" + PRODUTO_ID + "/movimentacoes";
