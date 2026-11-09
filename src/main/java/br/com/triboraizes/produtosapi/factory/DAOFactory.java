@@ -14,6 +14,8 @@ import br.com.triboraizes.produtosapi.model.CrmOrigem;
 import br.com.triboraizes.produtosapi.model.Fornecedor;
 import br.com.triboraizes.produtosapi.model.Interacao;
 import br.com.triboraizes.produtosapi.model.Lead;
+import br.com.triboraizes.produtosapi.model.Notificacao;
+import br.com.triboraizes.produtosapi.model.PreferenciaNotificacao;
 import br.com.triboraizes.produtosapi.model.Reclamacao;
 import br.com.triboraizes.produtosapi.model.ReclamacaoEvento;
 import org.springframework.stereotype.Component;
@@ -76,6 +78,15 @@ public class DAOFactory {
 
     public CadastroDAO<ReclamacaoEvento> criarReclamacaoEventoDAO() {
         return cadastro("reclamacao_eventos", ReclamacaoEvento.COLUNAS, "o evento da reclamação", ReclamacaoEvento.class);
+    }
+
+    public CadastroDAO<Notificacao> criarNotificacaoDAO() {
+        return cadastro("notificacoes", Notificacao.COLUNAS, "a notificação", Notificacao.class);
+    }
+
+    public CadastroDAO<PreferenciaNotificacao> criarPreferenciaNotificacaoDAO() {
+        return cadastro("preferencias_notificacao", PreferenciaNotificacao.COLUNAS, "a preferência",
+                PreferenciaNotificacao.class);
     }
 
     private <T> CadastroDAO<T> cadastro(String tabela, String colunas, String nome, Class<T> tipo) {

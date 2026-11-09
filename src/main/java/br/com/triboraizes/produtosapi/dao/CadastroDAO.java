@@ -44,6 +44,12 @@ public interface CadastroDAO<T> {
 
     boolean excluir(UUID id);
 
+    /** Atualiza todas as linhas que atendem aos filtros (ao menos um é obrigatório) e devolve quantas mudaram. */
+    int atualizarOnde(Map<String, String> filtros, Map<String, Object> dados);
+
+    /** Insere as linhas ou, havendo conflito nas colunas indicadas ({@code usuario_id,tipo}), atualiza as existentes. */
+    List<T> gravarVarias(List<Map<String, Object>> linhas, String colunasDoConflito);
+
     /** Chama uma função do banco ({@code /rpc/nome}) que devolve linhas desta tabela. */
     List<T> rpc(String funcao, Map<String, Object> parametros);
 }

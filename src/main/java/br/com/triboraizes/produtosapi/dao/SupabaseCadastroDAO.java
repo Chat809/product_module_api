@@ -115,6 +115,40 @@ public class SupabaseCadastroDAO<T> extends SupabaseTabela implements CadastroDA
     }
 
     @Override
+    public int atualizarOnde(Map<String, String> filtros, Map<String, Object> dados) {
+        if (filtros.isEmpty()) {
+            throw new IllegalArgumentException("Atualização sem filtro alteraria a tabela inteira");
+        }
+        Map<String, Object> valores = new HashMap<>();
+        StringBuilder uri = new StringBuilder(tabela + "?select=id");
+        acrescentarFiltros(uri, valores, filtros);
+        List<Map<String, Object>> alteradas = gravando(() -> restClient.patch()
+                .uri(uri.toString(), valores)
+                .header("Prefer", "return=representation")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(dados)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                }));
+        return alteradas == null ? 0 : alteradas.size();
+    }
+
+    @Override
+    public List<T> gravarVarias(List<Map<String, Object>> linhas, String colunasDoConflito) {
+        if (linhas.isEmpty()) {
+            return List.of();
+        }
+        List<T> gravadas = gravando(() -> restClient.post()
+                .uri(tabela + "?select={colunas}&on_conflict={conflito}", colunas, colunasDoConflito)
+                .header("Prefer", "return=representation,resolution=merge-duplicates")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(linhas)
+                .retrieve()
+                .body(lista));
+        return gravadas == null ? List.of() : gravadas;
+    }
+
+    @Override
     public List<T> rpc(String funcao, Map<String, Object> parametros) {
         List<T> linhas = gravando(() -> restClient.post()
                 .uri("/rest/v1/rpc/" + funcao + "?select={colunas}", colunas)
