@@ -82,6 +82,9 @@ public class SecurityConfig {
                         .hasAuthority(Submodulo.FINANCEIRO_FORNECEDORES.autoridade())
                         .requestMatchers("/api/v1/financeiro/centros-custo", "/api/v1/financeiro/centros-custo/**")
                         .hasAuthority(Submodulo.FINANCEIRO_CENTROS_CUSTO.autoridade())
+                        // A ficha do cliente (interações e reclamações) fica no CRM; o financeiro só lê o cadastro.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/crm/clientes/*/interacoes", "/api/v1/crm/clientes/*/reclamacoes")
+                        .hasAuthority(Modulo.CRM.autoridade())
                         .requestMatchers(HttpMethod.GET, "/api/v1/crm/clientes", "/api/v1/crm/clientes/**")
                         .hasAnyAuthority(Modulo.CRM.autoridade(), Modulo.FINANCEIRO.autoridade())
                         .requestMatchers("/api/v1/crm/clientes", "/api/v1/crm/clientes/**")

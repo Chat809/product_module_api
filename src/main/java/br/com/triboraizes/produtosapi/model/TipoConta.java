@@ -8,7 +8,7 @@ import java.util.Arrays;
  */
 public enum TipoConta {
     PAGAR("contas-pagar", "contas_pagar", "favorecido", "data_pagamento", StatusConta.PAGO, "fornecedor_id"),
-    RECEBER("contas-receber", "contas_receber", "pagador", "data_recebimento", StatusConta.RECEBIDO, null);
+    RECEBER("contas-receber", "contas_receber", "pagador", "data_recebimento", StatusConta.RECEBIDO, "cliente_id");
 
     private final String caminho;
     private final String tabela;
