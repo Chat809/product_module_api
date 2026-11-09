@@ -1,6 +1,7 @@
 package br.com.triboraizes.produtosapi.config;
 
 import br.com.triboraizes.produtosapi.model.Modulo;
+import br.com.triboraizes.produtosapi.model.Submodulo;
 import br.com.triboraizes.produtosapi.security.PermissoesDoTokenConverter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -28,8 +29,9 @@ import java.util.Collection;
 
 /**
  * A API é um resource server: valida o JWT emitido pelo Supabase Auth (ES256, chaves públicas do JWKS)
- * e não guarda sessão. Produtos, demandas e financeiro exigem o módulo correspondente ({@code MODULO_*}),
- * a gestão de usuários exige o papel ADMIN e "Meu perfil" vale para qualquer usuário logado. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
+ * e não guarda sessão. Cada rota exige a subaba correspondente ({@code SUB_*}); leituras usadas como opções em
+ * outras telas exigem só o módulo ({@code MODULO_*}). "Meu perfil" e notificações valem para qualquer usuário logado,
+ * e o webhook de entrada é público, autenticado pelo token da própria URL. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
  */
 @Configuration
 @EnableConfigurationProperties(SupabaseProperties.class)
@@ -61,18 +63,55 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health", "/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/entrada/*").permitAll()
                         .requestMatchers("/api/v1/usuarios/me", "/api/v1/usuarios/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/opcoes")
-                        .hasAuthority(Modulo.DEMANDAS.autoridade())
-                        .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/demandas/**").hasAuthority(Modulo.DEMANDAS.autoridade())
-                        .requestMatchers("/api/v1/financeiro/**").hasAuthority(Modulo.FINANCEIRO.autoridade())
+                        .hasAnyAuthority(Modulo.DEMANDAS.autoridade(), Modulo.CRM.autoridade())
+                        .requestMatchers("/api/v1/usuarios/**").hasAuthority(Submodulo.CONFIGURACOES_USUARIOS.autoridade())
+                        .requestMatchers("/api/v1/demandas/**").hasAuthority(Submodulo.DEMANDAS_QUADRO.autoridade())
+                        .requestMatchers("/api/v1/financeiro/resumo").hasAuthority(Modulo.FINANCEIRO.autoridade())
+                        .requestMatchers("/api/v1/financeiro/contas-pagar", "/api/v1/financeiro/contas-pagar/**")
+                        .hasAuthority(Submodulo.FINANCEIRO_CONTAS_PAGAR.autoridade())
+                        .requestMatchers("/api/v1/financeiro/contas-receber", "/api/v1/financeiro/contas-receber/**")
+                        .hasAuthority(Submodulo.FINANCEIRO_CONTAS_RECEBER.autoridade())
+                        // Fornecedores e centros de custo aparecem como opções nos lançamentos de qualquer subaba do financeiro.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/financeiro/fornecedores", "/api/v1/financeiro/fornecedores/**",
+                                "/api/v1/financeiro/centros-custo", "/api/v1/financeiro/centros-custo/**")
+                        .hasAuthority(Modulo.FINANCEIRO.autoridade())
+                        .requestMatchers("/api/v1/financeiro/fornecedores", "/api/v1/financeiro/fornecedores/**")
+                        .hasAuthority(Submodulo.FINANCEIRO_FORNECEDORES.autoridade())
+                        .requestMatchers("/api/v1/financeiro/centros-custo", "/api/v1/financeiro/centros-custo/**")
+                        .hasAuthority(Submodulo.FINANCEIRO_CENTROS_CUSTO.autoridade())
+                        .requestMatchers(HttpMethod.GET, "/api/v1/crm/clientes", "/api/v1/crm/clientes/**")
+                        .hasAnyAuthority(Modulo.CRM.autoridade(), Modulo.FINANCEIRO.autoridade())
+                        .requestMatchers("/api/v1/crm/clientes", "/api/v1/crm/clientes/**")
+                        .hasAuthority(Submodulo.CRM_CLIENTES.autoridade())
+                        .requestMatchers("/api/v1/crm/leads", "/api/v1/crm/leads/**")
+                        .hasAuthority(Submodulo.CRM_LEADS.autoridade())
+                        .requestMatchers("/api/v1/crm/reclamacoes", "/api/v1/crm/reclamacoes/**")
+                        .hasAuthority(Submodulo.CRM_RECLAMACOES.autoridade())
+                        .requestMatchers(HttpMethod.GET, "/api/v1/crm/parametros/**").hasAuthority(Modulo.CRM.autoridade())
+                        .requestMatchers("/api/v1/crm/parametros/**")
+                        .hasAuthority(Submodulo.CONFIGURACOES_PARAMETROS_CRM.autoridade())
+                        .requestMatchers("/api/v1/relatorios/financeiro/**")
+                        .hasAuthority(Submodulo.RELATORIOS_FINANCEIRO.autoridade())
+                        .requestMatchers("/api/v1/relatorios/comercial/**")
+                        .hasAuthority(Submodulo.RELATORIOS_COMERCIAL.autoridade())
+                        .requestMatchers("/api/v1/relatorios/estoque/**")
+                        .hasAuthority(Submodulo.RELATORIOS_ESTOQUE.autoridade())
+                        .requestMatchers("/api/v1/relatorios/atendimento/**")
+                        .hasAuthority(Submodulo.RELATORIOS_ATENDIMENTO.autoridade())
+                        .requestMatchers("/api/v1/notificacoes", "/api/v1/notificacoes/**").authenticated()
+                        .requestMatchers("/api/v1/configuracoes/webhooks/**")
+                        .hasAuthority(Submodulo.CONFIGURACOES_WEBHOOKS.autoridade())
+                        .requestMatchers("/api/v1/configuracoes/integracoes/**")
+                        .hasAuthority(Submodulo.CONFIGURACOES_INTEGRACOES.autoridade())
                         .requestMatchers(HttpMethod.GET, "/api/v1/produtos/resumo")
-                        .hasAuthority(Modulo.DASHBOARD.autoridade())
-                        // O dashboard também lê o catálogo e o histórico; alterar qualquer coisa exige o módulo de produtos.
+                        .hasAuthority(Submodulo.INICIO_DASHBOARD.autoridade())
+                        // O dashboard também lê o catálogo e o histórico; alterar qualquer coisa exige a subaba de produtos.
                         .requestMatchers(HttpMethod.GET, "/api/v1/produtos/**")
-                        .hasAnyAuthority(Modulo.DASHBOARD.autoridade(), Modulo.PRODUTOS.autoridade())
-                        .requestMatchers("/api/v1/produtos/**").hasAuthority(Modulo.PRODUTOS.autoridade())
+                        .hasAnyAuthority(Submodulo.INICIO_DASHBOARD.autoridade(), Submodulo.ESTOQUE_PRODUTOS.autoridade())
+                        .requestMatchers("/api/v1/produtos/**").hasAuthority(Submodulo.ESTOQUE_PRODUTOS.autoridade())
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(conversor))

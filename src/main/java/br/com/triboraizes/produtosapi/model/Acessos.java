@@ -2,22 +2,25 @@ package br.com.triboraizes.produtosapi.model;
 
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * Regras da coluna {@code acessos} (jsonb) do perfil: uma lista de chaves de {@link Modulo} ou {@code ["*"]}.
- * Administradores têm sempre acesso total, e o módulo de usuários é exclusivo deles.
+ * Regras da coluna {@code acessos} (jsonb) do perfil: {@code ["*"]} ou uma lista de chaves de
+ * {@link Submodulo} ({@code financeiro/contas-pagar}). A chave de um {@link Modulo} libera todas as subabas dele,
+ * e as chaves anteriores à divisão em subabas ({@code dashboard}, {@code produtos}) continuam valendo.
+ * Administradores têm sempre acesso total.
  */
 public final class Acessos {
 
     public static final String TOTAL = "*";
     public static final List<String> ACESSO_TOTAL = List.of(TOTAL);
     /** O mesmo default da coluna no banco, aplicado a toda conta nova. */
-    public static final List<String> PADRAO =
-            List.of(Modulo.DASHBOARD.chave(), Modulo.PRODUTOS.chave(), Modulo.DEMANDAS.chave());
+    public static final List<String> PADRAO = List.of(
+            Submodulo.INICIO_DASHBOARD.chave(), Submodulo.ESTOQUE_PRODUTOS.chave(), Submodulo.DEMANDAS_QUADRO.chave());
 
     private Acessos() {
     }
@@ -36,38 +39,64 @@ public final class Acessos {
         return PADRAO;
     }
 
-    /** Módulos efetivamente liberados. Para usuários comuns, {@code *} libera tudo exceto {@link Modulo#USUARIOS}. */
-    public static Set<Modulo> liberados(Papel papel, Collection<String> acessos) {
+    /** Subabas efetivamente liberadas. Para usuários comuns, {@code *} libera tudo exceto as subabas de administrador. */
+    public static Set<Submodulo> liberados(Papel papel, Collection<String> acessos) {
         if (papel == Papel.ADMIN) {
-            return EnumSet.allOf(Modulo.class);
+            return EnumSet.allOf(Submodulo.class);
         }
-        EnumSet<Modulo> modulos = EnumSet.noneOf(Modulo.class);
+        EnumSet<Submodulo> subabas = EnumSet.noneOf(Submodulo.class);
         if (acessos.contains(TOTAL)) {
-            modulos.addAll(EnumSet.allOf(Modulo.class));
+            subabas.addAll(EnumSet.allOf(Submodulo.class));
         } else {
-            acessos.forEach(chave -> Modulo.de(chave).ifPresent(modulos::add));
+            acessos.forEach(chave -> subabas.addAll(expandir(chave)));
         }
-        modulos.remove(Modulo.USUARIOS);
+        subabas.removeIf(Submodulo::somenteAdmin);
+        Arrays.stream(Submodulo.values()).filter(Submodulo::livre).forEach(subabas::add);
+        return subabas;
+    }
+
+    /** Módulos com ao menos uma subaba liberada. */
+    public static Set<Modulo> modulos(Set<Submodulo> subabas) {
+        EnumSet<Modulo> modulos = EnumSet.noneOf(Modulo.class);
+        subabas.forEach(sub -> modulos.add(sub.modulo()));
         return modulos;
     }
 
-    /** Valida os acessos pedidos para gravação e devolve a forma canônica: {@code ["*"]} ou módulos na ordem do enum. */
+    /**
+     * Valida os acessos pedidos para gravação e devolve a forma canônica: {@code ["*"]} ou as chaves das subabas
+     * na ordem do menu (chaves de módulo viram todas as suas subabas).
+     */
     public static List<String> normalizar(Papel papel, Collection<String> acessos) {
         if (papel == Papel.ADMIN) {
             return ACESSO_TOTAL;
         }
-        EnumSet<Modulo> modulos = EnumSet.noneOf(Modulo.class);
+        EnumSet<Submodulo> subabas = EnumSet.noneOf(Submodulo.class);
         for (String chave : acessos) {
             if (TOTAL.equals(chave)) {
                 return ACESSO_TOTAL;
             }
-            Modulo modulo = Modulo.de(chave).orElseThrow(() -> new RequisicaoInvalidaException(
-                    "Acesso desconhecido: '" + chave + "'. Use '*', 'dashboard', 'produtos', 'demandas' ou 'financeiro'"));
-            if (modulo == Modulo.USUARIOS) {
-                throw new RequisicaoInvalidaException("O módulo 'usuarios' é exclusivo de administradores");
+            Set<Submodulo> pedidas = expandir(chave);
+            if (pedidas.isEmpty()) {
+                throw new RequisicaoInvalidaException("Acesso desconhecido: '" + chave
+                        + "'. Use '*', a chave de um módulo (ex.: 'crm') ou de uma subaba (ex.: 'crm/leads')");
             }
-            modulos.add(modulo);
+            if (pedidas.stream().allMatch(Submodulo::somenteAdmin)) {
+                throw new RequisicaoInvalidaException("O acesso '" + chave + "' é exclusivo de administradores");
+            }
+            subabas.addAll(pedidas);
         }
-        return modulos.stream().map(Modulo::chave).toList();
+        return subabas.stream()
+                .filter(sub -> !sub.somenteAdmin() && !sub.livre())
+                .map(Submodulo::chave)
+                .toList();
+    }
+
+    private static Set<Submodulo> expandir(String chave) {
+        EnumSet<Submodulo> subabas = EnumSet.noneOf(Submodulo.class);
+        Submodulo.de(chave).ifPresent(subabas::add);
+        Modulo.de(chave).ifPresent(modulo -> Arrays.stream(Submodulo.values())
+                .filter(sub -> sub.modulo() == modulo)
+                .forEach(subabas::add));
+        return subabas;
     }
 }
