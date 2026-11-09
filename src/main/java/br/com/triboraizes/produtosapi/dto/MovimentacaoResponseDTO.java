@@ -30,14 +30,14 @@ public record MovimentacaoResponseDTO(
 
     public static MovimentacaoResponseDTO from(MovimentacaoEstoque movimentacao) {
         return new MovimentacaoResponseDTO(
-                movimentacao.getId(),
-                movimentacao.getProduto().getId(),
-                movimentacao.getTipo(),
-                movimentacao.getQuantidade(),
-                movimentacao.getSaldoAnterior(),
-                movimentacao.getSaldoApos(),
-                movimentacao.getMotivo(),
-                movimentacao.getCriadoEm()
+                movimentacao.id(),
+                movimentacao.produtoId(),
+                movimentacao.tipo(),
+                movimentacao.quantidade(),
+                movimentacao.saldoAnterior(),
+                movimentacao.saldoApos(),
+                movimentacao.motivo(),
+                movimentacao.criadoEm() == null ? null : movimentacao.criadoEm().toInstant()
         );
     }
 }

@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -57,8 +59,9 @@ public class MovimentacaoController {
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = ESTOQUE_INSUFICIENTE)))
     public MovimentacaoResponseDTO registrar(@PathVariable UUID produtoId,
-                                             @Valid @RequestBody MovimentacaoRequestDTO request) {
-        return movimentacaoService.registrar(produtoId, request);
+                                             @Valid @RequestBody MovimentacaoRequestDTO request,
+                                             @AuthenticationPrincipal Jwt jwt) {
+        return movimentacaoService.registrar(produtoId, request, UUID.fromString(jwt.getSubject()));
     }
 
     @GetMapping

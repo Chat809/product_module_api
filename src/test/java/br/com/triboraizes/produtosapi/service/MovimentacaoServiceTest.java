@@ -18,9 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,14 +28,18 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MovimentacaoServiceTest {
 
     private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID USUARIO = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final OffsetDateTime AGORA = OffsetDateTime.parse("2026-11-09T12:00:00Z");
 
     @Mock
     private DAOFactory daoFactory;
@@ -48,110 +52,102 @@ class MovimentacaoServiceTest {
 
     private MovimentacaoService movimentacaoService;
 
-    private Produto produto;
-
     @BeforeEach
     void setUp() {
         when(daoFactory.criarProdutoDAO()).thenReturn(produtoDAO);
         when(daoFactory.criarMovimentacaoDAO()).thenReturn(movimentacaoDAO);
         movimentacaoService = new MovimentacaoService(daoFactory);
+    }
 
-        produto = new Produto("Teclado", null, new BigDecimal("349.90"), 10);
-        ReflectionTestUtils.setField(produto, "id", ID);
+    private static MovimentacaoEstoque movimentacao(TipoMovimentacao tipo, int quantidade, int antes, int depois,
+                                                    String motivo) {
+        return new MovimentacaoEstoque(UUID.randomUUID(), ID, tipo, quantidade, antes, depois, motivo, USUARIO, AGORA);
     }
 
     @Test
-    @DisplayName("Deve registrar uma entrada somando ao estoque")
+    @DisplayName("Deve registrar uma entrada pelo banco, com motivo sem espaços e o autor")
     void deveRegistrarEntrada() {
-        // given
-        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(produto));
-        when(movimentacaoDAO.salvar(any(MovimentacaoEstoque.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(movimentacaoDAO.registrar(ID, TipoMovimentacao.ENTRADA, 5, "Reposição", USUARIO))
+                .thenReturn(Optional.of(movimentacao(TipoMovimentacao.ENTRADA, 5, 10, 15, "Reposição")));
 
-        // when
-        MovimentacaoResponseDTO response = movimentacaoService.registrar(ID,
-                new MovimentacaoRequestDTO(TipoMovimentacao.ENTRADA, 5, " Reposição "));
+        MovimentacaoResponseDTO registrada = movimentacaoService.registrar(ID,
+                new MovimentacaoRequestDTO(TipoMovimentacao.ENTRADA, 5, "  Reposição "), USUARIO);
 
-        // then
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(15);
-        assertThat(response)
-                .extracting(MovimentacaoResponseDTO::produtoId, MovimentacaoResponseDTO::tipo,
-                        MovimentacaoResponseDTO::saldoAnterior, MovimentacaoResponseDTO::saldoApos,
-                        MovimentacaoResponseDTO::motivo)
-                .containsExactly(ID, TipoMovimentacao.ENTRADA, 10, 15, "Reposição");
-        verify(produtoDAO).atualizar(produto);
+        assertThat(registrada.produtoId()).isEqualTo(ID);
+        assertThat(registrada.saldoAnterior()).isEqualTo(10);
+        assertThat(registrada.saldoApos()).isEqualTo(15);
+        assertThat(registrada.criadoEm()).isEqualTo(AGORA.toInstant());
     }
 
     @Test
-    @DisplayName("Deve registrar uma saída subtraindo do estoque")
-    void deveRegistrarSaida() {
-        // given
-        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(produto));
-        when(movimentacaoDAO.salvar(any(MovimentacaoEstoque.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("Deve registrar uma saída sem motivo")
+    void deveRegistrarSaidaSemMotivo() {
+        when(movimentacaoDAO.registrar(ID, TipoMovimentacao.SAIDA, 4, null, USUARIO))
+                .thenReturn(Optional.of(movimentacao(TipoMovimentacao.SAIDA, 4, 10, 6, null)));
 
-        // when
-        MovimentacaoResponseDTO response = movimentacaoService.registrar(ID,
-                new MovimentacaoRequestDTO(TipoMovimentacao.SAIDA, 10, null));
+        MovimentacaoResponseDTO registrada = movimentacaoService.registrar(ID,
+                new MovimentacaoRequestDTO(TipoMovimentacao.SAIDA, 4, " "), USUARIO);
 
-        // then
-        assertThat(produto.getQuantidadeEmEstoque()).isZero();
-        assertThat(response.saldoApos()).isZero();
+        assertThat(registrada.saldoApos()).isEqualTo(6);
+        assertThat(registrada.motivo()).isNull();
     }
 
     @Test
-    @DisplayName("Deve recusar uma saída maior que o estoque sem alterar o produto")
-    void deveRecusarSaidaMaiorQueEstoque() {
-        // given
-        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(produto));
+    @DisplayName("Deve repassar a recusa do banco quando a saída for maior que o estoque")
+    void deveRecusarSaidaMaiorQueOEstoque() {
+        when(movimentacaoDAO.registrar(ID, TipoMovimentacao.SAIDA, 99, null, USUARIO))
+                .thenThrow(new EstoqueInsuficienteException(10, 99));
 
-        // when / then
         assertThatThrownBy(() -> movimentacaoService.registrar(ID,
-                new MovimentacaoRequestDTO(TipoMovimentacao.SAIDA, 11, null)))
+                new MovimentacaoRequestDTO(TipoMovimentacao.SAIDA, 99, null), USUARIO))
                 .isInstanceOf(EstoqueInsuficienteException.class)
-                .hasMessageContaining("10");
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(10);
-        verify(produtoDAO, never()).atualizar(any());
-        verify(movimentacaoDAO, never()).salvar(any());
+                .hasMessageContaining("há 10 unidade(s)");
     }
 
     @Test
-    @DisplayName("Deve recusar o registro manual de um ajuste")
+    @DisplayName("Deve recusar o registro manual de um ajuste sem chamar o banco")
     void deveRecusarAjusteManual() {
-        // given
-        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(produto));
-
-        // when / then
         assertThatThrownBy(() -> movimentacaoService.registrar(ID,
-                new MovimentacaoRequestDTO(TipoMovimentacao.AJUSTE, 1, null)))
+                new MovimentacaoRequestDTO(TipoMovimentacao.AJUSTE, 1, null), USUARIO))
                 .isInstanceOf(RequisicaoInvalidaException.class);
-        verify(movimentacaoDAO, never()).salvar(any());
+
+        verifyNoInteractions(movimentacaoDAO);
     }
 
     @Test
     @DisplayName("Deve lançar exceção ao movimentar um produto inexistente")
-    void deveLancarExcecaoParaProdutoInexistente() {
-        // given
-        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.empty());
+    void deveFalharComProdutoInexistente() {
+        when(movimentacaoDAO.registrar(ID, TipoMovimentacao.ENTRADA, 1, null, USUARIO)).thenReturn(Optional.empty());
 
-        // when / then
         assertThatThrownBy(() -> movimentacaoService.registrar(ID,
-                new MovimentacaoRequestDTO(TipoMovimentacao.ENTRADA, 1, null)))
+                new MovimentacaoRequestDTO(TipoMovimentacao.ENTRADA, 1, null), USUARIO))
                 .isInstanceOf(ProdutoNaoEncontradoException.class);
     }
 
     @Test
     @DisplayName("Deve listar uma página do histórico do produto")
     void deveListarHistorico() {
-        // given
+        Produto produto = new Produto(ID, null, "Teclado", null, null, null, new BigDecimal("10.00"), null, 15, true,
+                null, null, AGORA, AGORA, 2L);
         when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.of(produto));
-        MovimentacaoEstoque entrada = new MovimentacaoEstoque(produto, TipoMovimentacao.ENTRADA, 10, 0, null);
-        when(movimentacaoDAO.listarPorProduto(produto, 0, 20)).thenReturn(List.of(entrada));
-        when(movimentacaoDAO.contarPorProduto(produto)).thenReturn(1L);
+        when(movimentacaoDAO.listarPorProduto(ID, 1, 2)).thenReturn(new MovimentacaoDAO.Pagina(
+                List.of(movimentacao(TipoMovimentacao.ENTRADA, 5, 10, 15, null)), 3));
 
-        // when
-        PaginaDTO<MovimentacaoResponseDTO> pagina = movimentacaoService.listar(ID, 0, 20);
+        PaginaDTO<MovimentacaoResponseDTO> pagina = movimentacaoService.listar(ID, 1, 2);
 
-        // then
-        assertThat(pagina.conteudo()).extracting(MovimentacaoResponseDTO::tipo).containsExactly(TipoMovimentacao.ENTRADA);
-        assertThat(pagina.totalElementos()).isEqualTo(1);
+        assertThat(pagina.conteudo()).hasSize(1);
+        assertThat(pagina.totalElementos()).isEqualTo(3);
+        assertThat(pagina.totalPaginas()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Deve responder 404 no histórico de um produto inexistente e validar a paginação")
+    void deveValidarHistorico() {
+        when(produtoDAO.buscarPorId(ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> movimentacaoService.listar(ID, 0, 20)).isInstanceOf(ProdutoNaoEncontradoException.class);
+        assertThatThrownBy(() -> movimentacaoService.listar(ID, -1, 20)).isInstanceOf(RequisicaoInvalidaException.class);
+        assertThatThrownBy(() -> movimentacaoService.listar(ID, 0, 101)).isInstanceOf(RequisicaoInvalidaException.class);
+        verify(movimentacaoDAO, never()).listarPorProduto(any(), anyInt(), anyInt());
     }
 }

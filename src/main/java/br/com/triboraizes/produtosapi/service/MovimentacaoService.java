@@ -9,16 +9,14 @@ import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
 import br.com.triboraizes.produtosapi.model.MovimentacaoEstoque;
-import br.com.triboraizes.produtosapi.model.Produto;
+import br.com.triboraizes.produtosapi.model.TipoMovimentacao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 @Service
-@Transactional(readOnly = true)
 public class MovimentacaoService {
 
     public static final int TAMANHO_MAXIMO_PAGINA = 100;
@@ -33,23 +31,19 @@ public class MovimentacaoService {
         this.movimentacaoDAO = daoFactory.criarMovimentacaoDAO();
     }
 
-    @Transactional
-    public MovimentacaoResponseDTO registrar(UUID produtoId, MovimentacaoRequestDTO request) {
-        Produto produto = buscarProduto(produtoId);
-        int saldoAnterior = produto.getQuantidadeEmEstoque();
-
-        switch (request.tipo()) {
-            case ENTRADA -> produto.registrarEntrada(request.quantidade());
-            case SAIDA -> produto.registrarSaida(request.quantidade());
-            case AJUSTE -> throw new RequisicaoInvalidaException(
+    /** O saldo é conferido pelo banco com o produto travado, então duas saídas simultâneas não deixam o estoque negativo. */
+    public MovimentacaoResponseDTO registrar(UUID produtoId, MovimentacaoRequestDTO request, UUID usuario) {
+        if (request.tipo() == TipoMovimentacao.AJUSTE) {
+            throw new RequisicaoInvalidaException(
                     "Use ENTRADA ou SAIDA. Ajustes são registrados automaticamente ao editar o produto");
         }
-        produtoDAO.atualizar(produto);
-        MovimentacaoEstoque movimentacao = movimentacaoDAO.salvar(new MovimentacaoEstoque(
-                produto, request.tipo(), request.quantidade(), saldoAnterior, request.motivo()));
+        String motivo = request.motivo() == null || request.motivo().isBlank() ? null : request.motivo().strip();
+        MovimentacaoEstoque movimentacao = movimentacaoDAO
+                .registrar(produtoId, request.tipo(), request.quantidade(), motivo, usuario)
+                .orElseThrow(() -> new ProdutoNaoEncontradoException(produtoId));
 
         log.info("Movimentação registrada: produto={}, tipo={}, quantidade={}, saldo={}",
-                produtoId, request.tipo(), request.quantidade(), produto.getQuantidadeEmEstoque());
+                produtoId, request.tipo(), request.quantidade(), movimentacao.saldoApos());
         return MovimentacaoResponseDTO.from(movimentacao);
     }
 
@@ -58,16 +52,10 @@ public class MovimentacaoService {
             throw new RequisicaoInvalidaException(
                     "Use 'page' a partir de 0 e 'size' entre 1 e " + TAMANHO_MAXIMO_PAGINA);
         }
-        Produto produto = buscarProduto(produtoId);
-        return PaginaDTO.of(
-                movimentacaoDAO.listarPorProduto(produto, pagina, tamanho),
-                MovimentacaoResponseDTO::from,
-                pagina,
-                tamanho,
-                movimentacaoDAO.contarPorProduto(produto));
-    }
-
-    private Produto buscarProduto(UUID id) {
-        return produtoDAO.buscarPorId(id).orElseThrow(() -> new ProdutoNaoEncontradoException(id));
+        if (produtoDAO.buscarPorId(produtoId).isEmpty()) {
+            throw new ProdutoNaoEncontradoException(produtoId);
+        }
+        MovimentacaoDAO.Pagina resultado = movimentacaoDAO.listarPorProduto(produtoId, pagina, tamanho);
+        return PaginaDTO.of(resultado.movimentacoes(), MovimentacaoResponseDTO::from, pagina, tamanho, resultado.total());
     }
 }

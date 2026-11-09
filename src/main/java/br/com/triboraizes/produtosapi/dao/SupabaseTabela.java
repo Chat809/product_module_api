@@ -5,6 +5,9 @@ import br.com.triboraizes.produtosapi.config.SupabaseProperties;
 import br.com.triboraizes.produtosapi.exception.ServicoDeDadosIndisponivelException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -40,6 +43,33 @@ abstract class SupabaseTabela {
                     FalhaDoSupabase.descrever(ex));
             throw new ServicoDeDadosIndisponivelException("Serviço de dados indisponível. Tente novamente.", ex);
         }
+    }
+
+    protected record Resultado<T>(List<T> linhas, long total) {
+    }
+
+    /** Executa a consulta pedindo a contagem: o total vem no {@code Content-Range} (por exemplo {@code 0-19/57}). */
+    protected <T> Resultado<T> paginado(RestClient.RequestHeadersSpec<?> consulta, ParameterizedTypeReference<List<T>> tipo) {
+        return chamar(() -> {
+            try {
+                ResponseEntity<List<T>> resposta = consulta.header("Prefer", "count=exact").retrieve().toEntity(tipo);
+                List<T> linhas = resposta.getBody() == null ? List.of() : resposta.getBody();
+                return new Resultado<>(linhas, total(resposta.getHeaders().getFirst("Content-Range")));
+            } catch (HttpClientErrorException ex) {
+                // Página além do fim: o PostgREST responde 416 com o total em "*/57".
+                if (ex.getStatusCode().value() == 416 && ex.getResponseHeaders() != null) {
+                    return new Resultado<>(List.of(), total(ex.getResponseHeaders().getFirst("Content-Range")));
+                }
+                throw ex;
+            }
+        });
+    }
+
+    private static long total(String intervalo) {
+        if (intervalo == null || !intervalo.contains("/") || intervalo.endsWith("*")) {
+            return 0L;
+        }
+        return Long.parseLong(intervalo.substring(intervalo.indexOf('/') + 1));
     }
 
     protected static <T> Optional<T> primeiro(List<T> linhas) {

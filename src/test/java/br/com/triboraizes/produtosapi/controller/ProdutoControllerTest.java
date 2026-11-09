@@ -5,9 +5,13 @@ import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
+import br.com.triboraizes.produtosapi.exception.CodigoDeProdutoDuplicadoException;
 import br.com.triboraizes.produtosapi.exception.ConflitoDeVersaoException;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
+import br.com.triboraizes.produtosapi.exception.ServicoDeDadosIndisponivelException;
+import br.com.triboraizes.produtosapi.model.FiltroProdutos;
+import br.com.triboraizes.produtosapi.model.UnidadeMedida;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,10 +19,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,6 +41,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -62,10 +68,12 @@ class ProdutoControllerTest {
 
     private static final UUID ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID INEXISTENTE = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private static final UUID USUARIO = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final Instant AGORA = Instant.parse("2026-11-03T12:00:00Z");
+    private static final FiltroProdutos SEM_FILTRO = new FiltroProdutos(null, null, null);
 
-    private static final ProdutoResponseDTO RESPONSE =
-            new ProdutoResponseDTO(ID, "Teclado", "Mecânico", new BigDecimal("349.90"), 25, AGORA, AGORA, 0L);
+    private static final ProdutoResponseDTO RESPONSE = new ProdutoResponseDTO(ID, "PER-001", "Teclado", "Mecânico",
+            "Periféricos", UnidadeMedida.UN, new BigDecimal("349.90"), new BigDecimal("210.00"), 25, true, AGORA, AGORA, 0L);
 
     @Autowired
     private MockMvc mockMvc;
@@ -73,28 +81,40 @@ class ProdutoControllerTest {
     @MockitoBean
     private ProdutoService produtoService;
 
+    /** Token de quem pode alterar o catálogo; o subject vira o autor da gravação. */
+    private static JwtRequestPostProcessor comoGestor() {
+        return jwt().jwt(token -> token.subject(USUARIO.toString()))
+                .authorities(new SimpleGrantedAuthority("MODULO_DASHBOARD"), new SimpleGrantedAuthority("MODULO_PRODUTOS"));
+    }
+
     @Test
     @DisplayName("GET /produtos deve retornar 200 com a primeira página ordenada por nome por padrão")
     void deveListarProdutos() throws Exception {
-        when(produtoService.listar(null, 0, 20, "nome,asc"))
+        when(produtoService.listar(SEM_FILTRO, 0, 20, "nome,asc"))
                 .thenReturn(new PaginaDTO<>(List.of(RESPONSE), 0, 20, 1, 1));
 
         mockMvc.perform(get(URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conteudo", hasSize(1)))
                 .andExpect(jsonPath("$.conteudo[0].id").value(ID.toString()))
+                .andExpect(jsonPath("$.conteudo[0].codigo").value("PER-001"))
+                .andExpect(jsonPath("$.conteudo[0].categoria").value("Periféricos"))
+                .andExpect(jsonPath("$.conteudo[0].unidade").value("UN"))
+                .andExpect(jsonPath("$.conteudo[0].custo").value(210.00))
+                .andExpect(jsonPath("$.conteudo[0].ativo").value(true))
                 .andExpect(jsonPath("$.conteudo[0].versao").value(0))
                 .andExpect(jsonPath("$.totalElementos").value(1))
                 .andExpect(jsonPath("$.totalPaginas").value(1));
     }
 
     @Test
-    @DisplayName("GET /produtos deve repassar busca, página, tamanho e ordenação ao serviço")
+    @DisplayName("GET /produtos deve repassar busca, filtros, página, tamanho e ordenação ao serviço")
     void deveRepassarParametrosDeListagem() throws Exception {
-        when(produtoService.listar("teclado", 2, 5, "preco,desc"))
+        when(produtoService.listar(new FiltroProdutos("teclado", false, "Periféricos"), 2, 5, "preco,desc"))
                 .thenReturn(new PaginaDTO<>(List.of(), 2, 5, 0, 0));
 
-        mockMvc.perform(get(URL).param("busca", "teclado").param("page", "2").param("size", "5").param("sort", "preco,desc"))
+        mockMvc.perform(get(URL).param("busca", "teclado").param("ativo", "false").param("categoria", "Periféricos")
+                        .param("page", "2").param("size", "5").param("sort", "preco,desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pagina").value(2));
     }
@@ -102,13 +122,24 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("GET /produtos deve retornar 400 quando um parâmetro de listagem for inválido")
     void deveRetornar400EmParametroDeListagemInvalido() throws Exception {
-        when(produtoService.listar(null, 0, 1000, "nome,asc"))
+        when(produtoService.listar(SEM_FILTRO, 0, 1000, "nome,asc"))
                 .thenThrow(new RequisicaoInvalidaException("O parâmetro 'size' deve estar entre 1 e 500"));
 
         mockMvc.perform(get(URL).param("size", "1000"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
                 .andExpect(jsonPath("$.detail").value("O parâmetro 'size' deve estar entre 1 e 500"));
+    }
+
+    @Test
+    @DisplayName("GET /produtos/categorias deve devolver as categorias em uso")
+    void deveListarCategorias() throws Exception {
+        when(produtoService.categorias()).thenReturn(List.of("Acessórios", "Periféricos"));
+
+        mockMvc.perform(get(URL + "/categorias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[1]").value("Periféricos"));
     }
 
     @Test
@@ -121,6 +152,16 @@ class ProdutoControllerTest {
                 .andExpect(jsonPath("$.totalProdutos").value(3))
                 .andExpect(jsonPath("$.valorTotal").value(1500.00))
                 .andExpect(jsonPath("$.limiteEstoqueBaixo").value(5));
+    }
+
+    @Test
+    @DisplayName("GET /produtos/resumo deve responder 503 quando o banco estiver indisponível")
+    void deveRetornar503SemBanco() throws Exception {
+        when(produtoService.resumo()).thenThrow(new ServicoDeDadosIndisponivelException("Serviço de dados indisponível. Tente novamente.", null));
+
+        mockMvc.perform(get(URL + "/resumo"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("Serviço de dados indisponível"));
     }
 
     @Test
@@ -156,11 +197,11 @@ class ProdutoControllerTest {
     }
 
     @Test
-    @DisplayName("POST /produtos deve retornar 201 com header Location e o produto criado")
+    @DisplayName("POST /produtos deve retornar 201 com header Location e gravar quem criou")
     void deveCriarProduto() throws Exception {
-        when(produtoService.criar(any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        when(produtoService.criar(any(ProdutoRequestDTO.class), eq(USUARIO))).thenReturn(RESPONSE);
 
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "http://localhost/api/v1/produtos/" + ID))
                 .andExpect(header().string("ETag", "\"0\""))
@@ -168,25 +209,64 @@ class ProdutoControllerTest {
     }
 
     @Test
+    @DisplayName("POST /produtos deve aceitar código, categoria, unidade, custo e ativo")
+    void deveCriarComCamposCompletos() throws Exception {
+        when(produtoService.criar(any(ProdutoRequestDTO.class), eq(USUARIO))).thenReturn(RESPONSE);
+        String completo = """
+                {"codigo": "per-001", "nome": "Teclado", "categoria": "Periféricos", "unidade": "CX",
+                 "preco": 349.90, "custo": 210, "quantidadeEmEstoque": 25, "ativo": false}
+                """;
+
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(completo))
+                .andExpect(status().isCreated());
+
+        verify(produtoService).criar(argThat(req -> "per-001".equals(req.codigo()) && req.unidade() == UnidadeMedida.CX
+                && Boolean.FALSE.equals(req.ativo()) && req.custo().compareTo(new BigDecimal("210")) == 0), eq(USUARIO));
+    }
+
+    @Test
     @DisplayName("POST /produtos deve retornar 400 com a lista de campos inválidos")
     void deveRetornar400QuandoDadosForemInvalidos() throws Exception {
         String jsonInvalido = """
-                {"nome": " ", "preco": 0, "quantidadeEmEstoque": -1}
+                {"codigo": "-x", "nome": " ", "preco": 0, "custo": -1, "quantidadeEmEstoque": -1}
                 """;
 
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(jsonInvalido))
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(jsonInvalido))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Dados inválidos"))
-                .andExpect(jsonPath("$.erros", hasSize(3)))
-                .andExpect(jsonPath("$.erros[?(@.campo == 'nome')].mensagem").value("O nome é obrigatório"));
+                .andExpect(jsonPath("$.erros", hasSize(5)))
+                .andExpect(jsonPath("$.erros[?(@.campo == 'nome')].mensagem").value("O nome é obrigatório"))
+                .andExpect(jsonPath("$.erros[?(@.campo == 'custo')].mensagem").value("O custo não pode ser negativo"));
 
         verifyNoInteractions(produtoService);
     }
 
     @Test
+    @DisplayName("POST /produtos deve retornar 400 quando a unidade não existir")
+    void deveRecusarUnidadeDesconhecida() throws Exception {
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\": \"Teclado\", \"preco\": 1, \"quantidadeEmEstoque\": 1, \"unidade\": \"TONELADA\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(produtoService);
+    }
+
+    @Test
+    @DisplayName("POST /produtos deve retornar 409 quando o código já existir")
+    void deveRetornar409EmCodigoDuplicado() throws Exception {
+        when(produtoService.criar(any(ProdutoRequestDTO.class), eq(USUARIO)))
+                .thenThrow(new CodigoDeProdutoDuplicadoException("PER-001"));
+
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Código já cadastrado"))
+                .andExpect(jsonPath("$.detail").value("Já existe um produto com o código PER-001"));
+    }
+
+    @Test
     @DisplayName("POST /produtos deve retornar 400 quando o JSON estiver malformado")
     void deveRetornar400QuandoJsonForMalformado() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"nome\": "))
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content("{\"nome\": "))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Requisição inválida"));
     }
@@ -194,51 +274,51 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("PUT /produtos/{id} deve retornar 200 com o produto atualizado")
     void deveAtualizarProduto() throws Exception {
-        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class), eq(USUARIO))).thenReturn(RESPONSE);
 
-        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk())
                 .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(jsonPath("$.nome").value("Teclado"));
 
-        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null));
+        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null), eq(USUARIO));
     }
 
     @Test
     @DisplayName("PUT /produtos/{id} deve usar a versão do If-Match, com prioridade sobre o corpo")
     void deveUsarVersaoDoIfMatch() throws Exception {
-        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class), eq(USUARIO))).thenReturn(RESPONSE);
         String jsonComVersao = """
                 {"nome": "Teclado", "preco": 349.90, "quantidadeEmEstoque": 25, "versao": 1}
                 """;
 
-        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "\"7\"")
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).header("If-Match", "\"7\"")
                         .contentType(MediaType.APPLICATION_JSON).content(jsonComVersao))
                 .andExpect(status().isOk());
-        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "W/\"8\"")
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).header("If-Match", "W/\"8\"")
                         .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk());
 
-        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(7).equals(req.versao())));
-        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(8).equals(req.versao())));
+        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(7).equals(req.versao())), eq(USUARIO));
+        verify(produtoService).atualizar(eq(ID), argThat(req -> Long.valueOf(8).equals(req.versao())), eq(USUARIO));
     }
 
     @Test
     @DisplayName("PUT /produtos/{id} com If-Match * deve atualizar sem checar a versão")
     void deveAceitarIfMatchCuringa() throws Exception {
-        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class))).thenReturn(RESPONSE);
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class), eq(USUARIO))).thenReturn(RESPONSE);
 
-        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "*")
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).header("If-Match", "*")
                         .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isOk());
 
-        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null));
+        verify(produtoService).atualizar(eq(ID), argThat(req -> req.versao() == null), eq(USUARIO));
     }
 
     @Test
     @DisplayName("PUT /produtos/{id} deve retornar 400 quando o If-Match for malformado")
     void deveRetornar400EmIfMatchMalformado() throws Exception {
-        mockMvc.perform(put(URL + "/" + ID).header("If-Match", "versao-3")
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).header("If-Match", "versao-3")
                         .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Parâmetro inválido"));
@@ -249,38 +329,29 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("PUT /produtos/{id} deve retornar 409 quando a versão enviada estiver desatualizada")
     void deveRetornar409EmConflitoDeVersao() throws Exception {
-        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class)))
+        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class), eq(USUARIO)))
                 .thenThrow(new ConflitoDeVersaoException(ID));
 
-        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put(URL + "/" + ID).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Conflito de edição"));
     }
 
     @Test
-    @DisplayName("PUT /produtos/{id} deve retornar 409 quando outra transação alterar o produto ao mesmo tempo")
-    void deveRetornar409EmEdicaoSimultanea() throws Exception {
-        when(produtoService.atualizar(eq(ID), any(ProdutoRequestDTO.class)))
-                .thenThrow(new ObjectOptimisticLockingFailureException("Produto", ID));
-
-        mockMvc.perform(put(URL + "/" + ID).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
-                .andExpect(status().isConflict());
-    }
-
-    @Test
     @DisplayName("PUT /produtos/{id} deve retornar 404 quando o produto não existir")
     void deveRetornar404AoAtualizarProdutoInexistente() throws Exception {
-        when(produtoService.atualizar(eq(INEXISTENTE), any(ProdutoRequestDTO.class)))
+        when(produtoService.atualizar(eq(INEXISTENTE), any(ProdutoRequestDTO.class), eq(USUARIO)))
                 .thenThrow(new ProdutoNaoEncontradoException(INEXISTENTE));
 
-        mockMvc.perform(put(URL + "/" + INEXISTENTE).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+        mockMvc.perform(put(URL + "/" + INEXISTENTE).with(comoGestor())
+                        .contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("DELETE /produtos/{id} deve retornar 204")
     void deveRemoverProduto() throws Exception {
-        mockMvc.perform(delete(URL + "/" + ID))
+        mockMvc.perform(delete(URL + "/" + ID).with(comoGestor()))
                 .andExpect(status().isNoContent());
 
         verify(produtoService).remover(ID);
@@ -291,7 +362,7 @@ class ProdutoControllerTest {
     void deveRetornar404AoRemoverProdutoInexistente() throws Exception {
         doThrow(new ProdutoNaoEncontradoException(INEXISTENTE)).when(produtoService).remover(INEXISTENTE);
 
-        mockMvc.perform(delete(URL + "/" + INEXISTENTE))
+        mockMvc.perform(delete(URL + "/" + INEXISTENTE).with(comoGestor()))
                 .andExpect(status().isNotFound());
     }
 
@@ -356,12 +427,13 @@ class ProdutoControllerTest {
 
     @Test
     @WithMockUser(authorities = "MODULO_DASHBOARD")
-    @DisplayName("Só com o dashboard: lê catálogo e resumo, mas não altera produtos")
+    @DisplayName("Só com o dashboard: lê catálogo, categorias e resumo, mas não altera produtos")
     void dashboardDeveSerSomenteLeitura() throws Exception {
-        when(produtoService.listar(null, 0, 20, "nome,asc")).thenReturn(new PaginaDTO<>(List.of(), 0, 20, 0, 0));
+        when(produtoService.listar(SEM_FILTRO, 0, 20, "nome,asc")).thenReturn(new PaginaDTO<>(List.of(), 0, 20, 0, 0));
         when(produtoService.resumo()).thenReturn(new ResumoEstoqueDTO(0, 0, BigDecimal.ZERO, 0, 0, 5));
 
         mockMvc.perform(get(URL)).andExpect(status().isOk());
+        mockMvc.perform(get(URL + "/categorias")).andExpect(status().isOk());
         mockMvc.perform(get(URL + "/resumo")).andExpect(status().isOk());
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
                 .andExpect(status().isForbidden())
@@ -389,7 +461,7 @@ class ProdutoControllerTest {
     @Test
     @DisplayName("Deve retornar 500 com mensagem genérica em erro inesperado")
     void deveRetornar500EmErroInesperado() throws Exception {
-        when(produtoService.listar(null, 0, 20, "nome,asc")).thenThrow(new IllegalStateException("falha interna"));
+        when(produtoService.listar(SEM_FILTRO, 0, 20, "nome,asc")).thenThrow(new IllegalStateException("falha interna"));
 
         mockMvc.perform(get(URL))
                 .andExpect(status().isInternalServerError())

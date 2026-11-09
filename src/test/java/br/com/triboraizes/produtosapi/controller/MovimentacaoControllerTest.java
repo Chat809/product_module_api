@@ -13,8 +13,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,6 +44,7 @@ class MovimentacaoControllerTest {
     private JwtDecoder jwtDecoder;
 
     private static final UUID PRODUTO_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID USUARIO = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String URL = "/api/v1/produtos/" + PRODUTO_ID + "/movimentacoes";
 
     private static final MovimentacaoResponseDTO RESPONSE = new MovimentacaoResponseDTO(
@@ -53,12 +57,18 @@ class MovimentacaoControllerTest {
     @MockitoBean
     private MovimentacaoService movimentacaoService;
 
-    @Test
-    @DisplayName("POST /movimentacoes deve retornar 201 com a movimentação registrada")
-    void deveRegistrarMovimentacao() throws Exception {
-        when(movimentacaoService.registrar(eq(PRODUTO_ID), any(MovimentacaoRequestDTO.class))).thenReturn(RESPONSE);
+    private static JwtRequestPostProcessor comoGestor() {
+        return jwt().jwt(token -> token.subject(USUARIO.toString()))
+                .authorities(new SimpleGrantedAuthority("MODULO_PRODUTOS"));
+    }
 
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+    @Test
+    @DisplayName("POST /movimentacoes deve retornar 201 com a movimentação registrada por quem está logado")
+    void deveRegistrarMovimentacao() throws Exception {
+        when(movimentacaoService.registrar(eq(PRODUTO_ID), any(MovimentacaoRequestDTO.class), eq(USUARIO)))
+                .thenReturn(RESPONSE);
+
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo": "ENTRADA", "quantidade": 5, "motivo": "Reposição"}
                                 """))
@@ -70,7 +80,7 @@ class MovimentacaoControllerTest {
     @Test
     @DisplayName("POST /movimentacoes deve retornar 400 quando tipo e quantidade forem inválidos")
     void deveRetornar400ComDadosInvalidos() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"quantidade\": 0}"))
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON).content("{\"quantidade\": 0}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erros", hasSize(2)));
 
@@ -80,10 +90,10 @@ class MovimentacaoControllerTest {
     @Test
     @DisplayName("POST /movimentacoes deve retornar 422 quando a saída for maior que o estoque")
     void deveRetornar422EmEstoqueInsuficiente() throws Exception {
-        when(movimentacaoService.registrar(eq(PRODUTO_ID), any(MovimentacaoRequestDTO.class)))
+        when(movimentacaoService.registrar(eq(PRODUTO_ID), any(MovimentacaoRequestDTO.class), eq(USUARIO)))
                 .thenThrow(new EstoqueInsuficienteException(3, 5));
 
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post(URL).with(comoGestor()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"tipo\": \"SAIDA\", \"quantidade\": 5}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.title").value("Estoque insuficiente"));

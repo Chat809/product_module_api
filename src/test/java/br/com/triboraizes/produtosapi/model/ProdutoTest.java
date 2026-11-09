@@ -1,99 +1,58 @@
 package br.com.triboraizes.produtosapi.model;
 
-import br.com.triboraizes.produtosapi.exception.EstoqueInsuficienteException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Regras de negócio da entidade, sem Spring nem banco de dados. */
+/** Normalização dos dados digitados antes de irem para o banco, sem Spring nem rede. */
 class ProdutoTest {
 
-    private static Produto produtoComEstoque(int quantidade) {
-        return new Produto("Teclado", "Mecânico", new BigDecimal("349.90"), quantidade);
+    private static final UUID USUARIO = UUID.fromString("33333333-3333-3333-3333-333333333333");
+
+    @Test
+    @DisplayName("Deve remover espaços das pontas, pôr o código em maiúsculas e arredondar valores para 2 casas")
+    void deveNormalizarDados() {
+        Produto produto = Produto.novo("  per-001 ", "  Teclado  ", "  Mecânico ", " Periféricos ", UnidadeMedida.CX,
+                new BigDecimal("10.005"), new BigDecimal("4.5"), 3, false, USUARIO);
+
+        assertThat(produto.codigo()).isEqualTo("PER-001");
+        assertThat(produto.nome()).isEqualTo("Teclado");
+        assertThat(produto.descricao()).isEqualTo("Mecânico");
+        assertThat(produto.categoria()).isEqualTo("Periféricos");
+        assertThat(produto.unidade()).isEqualTo(UnidadeMedida.CX);
+        assertThat(produto.preco()).isEqualByComparingTo("10.01");
+        assertThat(produto.preco().scale()).isEqualTo(2);
+        assertThat(produto.custo()).isEqualByComparingTo("4.50");
+        assertThat(produto.ativo()).isFalse();
+        assertThat(produto.criadoPor()).isEqualTo(USUARIO);
+        assertThat(produto.atualizadoPor()).isEqualTo(USUARIO);
+        assertThat(produto.id()).isNull();
+        assertThat(produto.versao()).isNull();
     }
 
     @Test
-    @DisplayName("Deve remover espaços das pontas do nome e da descrição e arredondar o preço para 2 casas")
-    void deveNormalizarDadosNaCriacao() {
-        Produto produto = new Produto("  Teclado  ", "  Mecânico ", new BigDecimal("10.005"), 3);
+    @DisplayName("Textos opcionais vazios viram nulos; unidade UN e ativo são o padrão")
+    void deveAplicarPadroes() {
+        Produto produto = Produto.novo(" ", "Mouse", "", "  ", null, new BigDecimal("89.9"), null, 0, null, null);
 
-        assertThat(produto.getNome()).isEqualTo("Teclado");
-        assertThat(produto.getDescricao()).isEqualTo("Mecânico");
-        assertThat(produto.getPreco()).isEqualByComparingTo("10.01");
-        assertThat(produto.getPreco().scale()).isEqualTo(2);
+        assertThat(produto.codigo()).isNull();
+        assertThat(produto.descricao()).isNull();
+        assertThat(produto.categoria()).isNull();
+        assertThat(produto.custo()).isNull();
+        assertThat(produto.unidade()).isEqualTo(UnidadeMedida.UN);
+        assertThat(produto.ativo()).isTrue();
     }
 
     @Test
-    @DisplayName("Deve aceitar descrição nula")
-    void deveAceitarDescricaoNula() {
-        Produto produto = new Produto("Teclado", null, BigDecimal.TEN, 0);
+    @DisplayName("Deve aceitar nome e preço nulos, deixando a validação para o DTO")
+    void deveAceitarNulos() {
+        Produto produto = Produto.novo(null, null, null, null, null, null, null, null, true, null);
 
-        assertThat(produto.getDescricao()).isNull();
-    }
-
-    @Test
-    @DisplayName("Atualizar deve substituir todos os dados")
-    void deveAtualizarTodosOsDados() {
-        Produto produto = produtoComEstoque(5);
-
-        produto.atualizar("Mouse", "Sem fio", new BigDecimal("99.9"), 12);
-
-        assertThat(produto.getNome()).isEqualTo("Mouse");
-        assertThat(produto.getDescricao()).isEqualTo("Sem fio");
-        assertThat(produto.getPreco()).isEqualByComparingTo("99.90");
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(12);
-    }
-
-    @Test
-    @DisplayName("Entrada deve somar ao estoque")
-    void entradaDeveSomarAoEstoque() {
-        Produto produto = produtoComEstoque(5);
-
-        produto.registrarEntrada(7);
-
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(12);
-    }
-
-    @Test
-    @DisplayName("Saída deve subtrair do estoque e pode zerá-lo")
-    void saidaDeveSubtrairDoEstoque() {
-        Produto produto = produtoComEstoque(5);
-
-        produto.registrarSaida(2);
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(3);
-
-        produto.registrarSaida(3);
-        assertThat(produto.getQuantidadeEmEstoque()).isZero();
-    }
-
-    @Test
-    @DisplayName("Saída maior que o estoque deve ser recusada sem alterar o saldo")
-    void saidaMaiorQueEstoqueDeveSerRecusada() {
-        Produto produto = produtoComEstoque(5);
-
-        assertThatThrownBy(() -> produto.registrarSaida(6))
-                .isInstanceOf(EstoqueInsuficienteException.class)
-                .hasMessageContaining("há 5 unidade(s)")
-                .hasMessageContaining("é de 6");
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(5);
-    }
-
-    @ParameterizedTest(name = "quantidade {0}")
-    @ValueSource(ints = {0, -1, -100})
-    @DisplayName("Entrada e saída devem exigir quantidade maior que zero")
-    void movimentacaoDeveExigirQuantidadePositiva(int quantidade) {
-        Produto produto = produtoComEstoque(5);
-
-        assertThatThrownBy(() -> produto.registrarEntrada(quantidade))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> produto.registrarSaida(quantidade))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThat(produto.getQuantidadeEmEstoque()).isEqualTo(5);
+        assertThat(produto.nome()).isNull();
+        assertThat(produto.preco()).isNull();
     }
 }

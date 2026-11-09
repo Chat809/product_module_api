@@ -8,9 +8,7 @@ import br.com.triboraizes.produtosapi.model.StatusConta;
 import br.com.triboraizes.produtosapi.model.TipoConta;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.time.LocalDate;
@@ -31,7 +29,6 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
         super(supabaseRestClient, properties);
     }
 
-    /** O total vem no {@code Content-Range} da mesma resposta (por exemplo {@code 0-19/57}). */
     @Override
     public Pagina listar(TipoConta tipo, FiltroContas filtro, int pagina, int tamanho) {
         StringBuilder uri = new StringBuilder(tabela(tipo) + "?select=" + colunas(tipo)
@@ -60,23 +57,8 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
             valores.put("busca", "(descricao.ilike.*" + termo + "*," + tipo.colunaPessoa() + ".ilike.*" + termo
                     + "*,categoria.ilike.*" + termo + "*)");
         }
-        return chamar(() -> {
-            try {
-                ResponseEntity<List<Conta>> resposta = restClient.get()
-                        .uri(uri.toString(), valores)
-                        .header("Prefer", "count=exact")
-                        .retrieve()
-                        .toEntity(LISTA);
-                List<Conta> contas = resposta.getBody() == null ? List.of() : resposta.getBody();
-                return new Pagina(contas, total(resposta.getHeaders().getFirst("Content-Range")));
-            } catch (HttpClientErrorException ex) {
-                // Página além do fim: o PostgREST responde 416 com o total em "*/57".
-                if (ex.getStatusCode().value() == 416 && ex.getResponseHeaders() != null) {
-                    return new Pagina(List.of(), total(ex.getResponseHeaders().getFirst("Content-Range")));
-                }
-                throw ex;
-            }
-        });
+        Resultado<Conta> resultado = paginado(restClient.get().uri(uri.toString(), valores), LISTA);
+        return new Pagina(resultado.linhas(), resultado.total());
     }
 
     @Override
@@ -167,12 +149,5 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
         return "id,descricao,pessoa:" + tipo.colunaPessoa() + ",documento,categoria,valor,percentual_imposto,"
                 + "valor_imposto,valor_liquido,vencimento,data_baixa:" + tipo.colunaBaixa()
                 + ",status,forma_pagamento,chave_pix,observacoes,criado_por,criado_em,atualizado_em";
-    }
-
-    private static long total(String intervalo) {
-        if (intervalo == null || !intervalo.contains("/") || intervalo.endsWith("*")) {
-            return 0L;
-        }
-        return Long.parseLong(intervalo.substring(intervalo.indexOf('/') + 1));
     }
 }

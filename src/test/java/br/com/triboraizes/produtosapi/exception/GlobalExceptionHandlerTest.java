@@ -7,7 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -52,9 +51,9 @@ class GlobalExceptionHandlerTest {
             throw new ConflitoDeVersaoException(ID);
         }
 
-        @GetMapping("/edicao-simultanea")
-        void edicaoSimultanea() {
-            throw new ObjectOptimisticLockingFailureException("Produto", ID);
+        @GetMapping("/codigo-duplicado")
+        void codigoDuplicado() {
+            throw new CodigoDeProdutoDuplicadoException("PER-001");
         }
 
         @GetMapping("/estoque-insuficiente")
@@ -115,9 +114,8 @@ class GlobalExceptionHandlerTest {
         problema(mockMvc.perform(get("/conflito")), 409, "Conflito de edição")
                 .andExpect(jsonPath("$.detail").value(
                         "O produto " + ID + " foi alterado por outra pessoa. Recarregue os dados e tente novamente."));
-        problema(mockMvc.perform(get("/edicao-simultanea")), 409, "Conflito de edição")
-                .andExpect(jsonPath("$.detail").value(
-                        "O produto foi alterado por outra pessoa. Recarregue os dados e tente novamente."));
+        problema(mockMvc.perform(get("/codigo-duplicado")), 409, "Código já cadastrado")
+                .andExpect(jsonPath("$.detail").value("Já existe um produto com o código PER-001"));
     }
 
     @Test

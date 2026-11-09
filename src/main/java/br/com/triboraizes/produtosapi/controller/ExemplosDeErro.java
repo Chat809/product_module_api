@@ -41,6 +41,14 @@ final class ExemplosDeErro {
               "instance": "/api/v1/produtos/3f1c2b4e-8a6d-4e2f-9b1a-0c5d7e8f9a10"
             }""";
 
+    static final String CODIGO_DUPLICADO = """
+            {
+              "title": "Código já cadastrado",
+              "status": 409,
+              "detail": "Já existe um produto com o código PER-001",
+              "instance": "/api/v1/produtos"
+            }""";
+
     static final String ESTOQUE_INSUFICIENTE = """
             {
               "title": "Estoque insuficiente",

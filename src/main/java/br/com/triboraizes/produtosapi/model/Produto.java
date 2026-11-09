@@ -1,119 +1,63 @@
 package br.com.triboraizes.produtosapi.model;
 
-import br.com.triboraizes.produtosapi.exception.EstoqueInsuficienteException;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 
-@Entity
-@Table(name = "produtos")
-public class Produto {
+/**
+ * Linha da tabela {@code public.produtos}. Versão, datas e o histórico de estoque
+ * são mantidos por gatilhos do banco a cada gravação.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record Produto(
+        UUID id,
+        String codigo,
+        String nome,
+        String descricao,
+        String categoria,
+        UnidadeMedida unidade,
+        BigDecimal preco,
+        BigDecimal custo,
+        @JsonProperty("quantidade_em_estoque") Integer quantidadeEmEstoque,
+        Boolean ativo,
+        @JsonProperty("criado_por") UUID criadoPor,
+        @JsonProperty("atualizado_por") UUID atualizadoPor,
+        @JsonProperty("criado_em") OffsetDateTime criadoEm,
+        @JsonProperty("atualizado_em") OffsetDateTime atualizadoEm,
+        Long versao
+) {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
-    @Column(nullable = false, length = 120)
-    private String nome;
-
-    @Column(length = 500)
-    private String descricao;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal preco;
-
-    @Column(name = "quantidade_em_estoque", nullable = false)
-    private Integer quantidadeEmEstoque;
-
-    @CreationTimestamp
-    @Column(name = "criado_em", nullable = false, updatable = false)
-    private Instant criadoEm;
-
-    @UpdateTimestamp
-    @Column(name = "atualizado_em", nullable = false)
-    private Instant atualizadoEm;
-
-    @Version
-    @Column(nullable = false)
-    private Long versao;
-
-    protected Produto() {
+    /**
+     * Dados digitados já no formato gravado: código em maiúsculas, textos sem espaços nas pontas
+     * (vazios viram {@code null}), valores com 2 casas, unidade {@code UN} e ativo por padrão.
+     */
+    public static Produto novo(String codigo, String nome, String descricao, String categoria, UnidadeMedida unidade,
+                               BigDecimal preco, BigDecimal custo, Integer quantidadeEmEstoque, Boolean ativo,
+                               UUID usuario) {
+        String codigoNormalizado = textoOuNulo(codigo);
+        return new Produto(null,
+                codigoNormalizado == null ? null : codigoNormalizado.toUpperCase(Locale.ROOT),
+                nome == null ? null : nome.strip(),
+                textoOuNulo(descricao),
+                textoOuNulo(categoria),
+                unidade == null ? UnidadeMedida.UN : unidade,
+                duasCasas(preco),
+                duasCasas(custo),
+                quantidadeEmEstoque,
+                ativo == null || ativo,
+                usuario, usuario, null, null, null);
     }
 
-    public Produto(String nome, String descricao, BigDecimal preco, Integer quantidadeEmEstoque) {
-        atualizar(nome, descricao, preco, quantidadeEmEstoque);
+    private static String textoOuNulo(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.strip();
     }
 
-    public void atualizar(String nome, String descricao, BigDecimal preco, Integer quantidadeEmEstoque) {
-        this.nome = strip(nome);
-        this.descricao = strip(descricao);
-        this.preco = preco == null ? null : preco.setScale(2, RoundingMode.HALF_UP);
-        this.quantidadeEmEstoque = quantidadeEmEstoque;
-    }
-
-    public void registrarEntrada(int quantidade) {
-        exigirPositiva(quantidade);
-        this.quantidadeEmEstoque += quantidade;
-    }
-
-    public void registrarSaida(int quantidade) {
-        exigirPositiva(quantidade);
-        if (quantidade > quantidadeEmEstoque) {
-            throw new EstoqueInsuficienteException(quantidadeEmEstoque, quantidade);
-        }
-        this.quantidadeEmEstoque -= quantidade;
-    }
-
-    private static void exigirPositiva(int quantidade) {
-        if (quantidade <= 0) {
-            throw new IllegalArgumentException("A quantidade movimentada deve ser maior que zero");
-        }
-    }
-
-    private static String strip(String valor) {
-        return valor == null ? null : valor.strip();
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getNome() {
-        return nome;
-    }
-
-    public String getDescricao() {
-        return descricao;
-    }
-
-    public BigDecimal getPreco() {
-        return preco;
-    }
-
-    public Integer getQuantidadeEmEstoque() {
-        return quantidadeEmEstoque;
-    }
-
-    public Instant getCriadoEm() {
-        return criadoEm;
-    }
-
-    public Instant getAtualizadoEm() {
-        return atualizadoEm;
-    }
-
-    public Long getVersao() {
-        return versao;
+    private static BigDecimal duasCasas(BigDecimal valor) {
+        return valor == null ? null : valor.setScale(2, RoundingMode.HALF_UP);
     }
 }

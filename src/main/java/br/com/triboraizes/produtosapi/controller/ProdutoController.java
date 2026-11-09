@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dto.ProdutoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.ProdutoResponseDTO;
 import br.com.triboraizes.produtosapi.dto.ResumoEstoqueDTO;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
+import br.com.triboraizes.produtosapi.model.FiltroProdutos;
 import br.com.triboraizes.produtosapi.service.ProdutoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,6 +19,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,10 +34,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.CODIGO_DUPLICADO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.CONFLITO;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.DADOS_INVALIDOS;
 import static br.com.triboraizes.produtosapi.controller.ExemplosDeErro.NAO_ENCONTRADO;
@@ -56,21 +61,33 @@ public class ProdutoController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista os produtos com paginação, busca e ordenação",
-            description = "A busca ignora maiúsculas e procura no nome e na descrição.")
+    @Operation(summary = "Lista os produtos com paginação, busca, filtros e ordenação",
+            description = "A busca ignora maiúsculas e procura no código, nome, descrição e categoria.")
     @ApiResponse(responseCode = "200", description = "Página de produtos")
     @ApiResponse(responseCode = "400", description = "Parâmetro de paginação ou ordenação inválido",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = PARAMETRO_INVALIDO)))
     public PaginaDTO<ProdutoResponseDTO> listar(
-            @Parameter(description = "Trecho do nome ou da descrição", example = "mouse")
+            @Parameter(description = "Trecho do código, nome, descrição ou categoria", example = "mouse")
             @RequestParam(required = false) String busca,
+            @Parameter(description = "true: só ativos; false: só inativos; omitido: todos")
+            @RequestParam(required = false) Boolean ativo,
+            @Parameter(description = "Categoria exata, sem diferenciar maiúsculas", example = "Periféricos")
+            @RequestParam(required = false) String categoria,
             @Parameter(description = "Índice da página, começando em 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Itens por página (1 a 500)") @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "coluna,asc|desc. Colunas: nome, preco, quantidadeEmEstoque, criadoEm, atualizadoEm",
-                    example = "preco,desc")
+            @Parameter(description = "coluna,asc|desc. Colunas: codigo, nome, categoria, preco, quantidadeEmEstoque, "
+                    + "criadoEm, atualizadoEm", example = "preco,desc")
             @RequestParam(defaultValue = "nome,asc") String sort) {
-        return produtoService.listar(busca, page, size, sort);
+        return produtoService.listar(new FiltroProdutos(busca, ativo, categoria), page, size, sort);
+    }
+
+    @GetMapping("/categorias")
+    @Operation(summary = "Categorias em uso no catálogo",
+            description = "Em ordem alfabética e sem repetição, para sugerir no cadastro e filtrar a lista.")
+    @ApiResponse(responseCode = "200", description = "Lista de categorias")
+    public List<String> categorias() {
+        return produtoService.categorias();
     }
 
     @GetMapping("/resumo")
@@ -105,8 +122,12 @@ public class ProdutoController {
     @ApiResponse(responseCode = "400", description = "Campos inválidos ou JSON malformado",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = DADOS_INVALIDOS)))
-    public ResponseEntity<ProdutoResponseDTO> criar(@Valid @RequestBody ProdutoRequestDTO request) {
-        ProdutoResponseDTO criado = produtoService.criar(request);
+    @ApiResponse(responseCode = "409", description = "Já existe um produto com o mesmo código",
+            content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
+                    examples = @ExampleObject(value = CODIGO_DUPLICADO)))
+    public ResponseEntity<ProdutoResponseDTO> criar(@Valid @RequestBody ProdutoRequestDTO request,
+                                                    @AuthenticationPrincipal Jwt jwt) {
+        ProdutoResponseDTO criado = produtoService.criar(request, UUID.fromString(jwt.getSubject()));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(criado.id())
@@ -129,16 +150,21 @@ public class ProdutoController {
     @ApiResponse(responseCode = "404", description = "Produto não encontrado",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
                     examples = @ExampleObject(value = NAO_ENCONTRADO)))
-    @ApiResponse(responseCode = "409", description = "O produto foi alterado depois da versão informada",
+    @ApiResponse(responseCode = "409", description = "O produto foi alterado depois da versão informada, "
+            + "ou o código já pertence a outro produto",
             content = @Content(mediaType = PROBLEM_JSON, schema = @Schema(implementation = ProblemDetail.class),
-                    examples = @ExampleObject(value = CONFLITO)))
+                    examples = {
+                            @ExampleObject(name = "Conflito de edição", value = CONFLITO),
+                            @ExampleObject(name = "Código já cadastrado", value = CODIGO_DUPLICADO)
+                    }))
     public ResponseEntity<ProdutoResponseDTO> atualizar(
             @PathVariable UUID id,
             @Valid @RequestBody ProdutoRequestDTO request,
             @Parameter(description = "ETag lido no GET, por exemplo \"3\"", example = "\"0\"")
-            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @AuthenticationPrincipal Jwt jwt) {
         ProdutoRequestDTO comVersao = ifMatch == null ? request : request.comVersao(versaoDoIfMatch(ifMatch));
-        return comEtag(ResponseEntity.ok(), produtoService.atualizar(id, comVersao));
+        return comEtag(ResponseEntity.ok(), produtoService.atualizar(id, comVersao, UUID.fromString(jwt.getSubject())));
     }
 
     @DeleteMapping("/{id}")

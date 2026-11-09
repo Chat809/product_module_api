@@ -1,41 +1,51 @@
 package br.com.triboraizes.produtosapi.dao;
 
+import br.com.triboraizes.produtosapi.model.FiltroProdutos;
 import br.com.triboraizes.produtosapi.model.Produto;
 import br.com.triboraizes.produtosapi.model.ResumoEstoque;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
-/**
- * Contrato de acesso a dados de {@link Produto}, independente da tecnologia de persistência.
- * As operações devem ser executadas dentro de uma transação aberta pela camada de serviço.
- */
+/** Contrato de acesso a dados de {@link Produto}, independente da tecnologia de persistência. */
 public interface ProdutoDAO {
 
-    Set<String> COLUNAS_ORDENAVEIS = Set.of("nome", "preco", "quantidadeEmEstoque", "criadoEm", "atualizadoEm");
+    /** Colunas aceitas no {@code sort}, com o nome correspondente no banco. */
+    Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
+            "codigo", "codigo",
+            "nome", "nome",
+            "categoria", "categoria",
+            "preco", "preco",
+            "quantidadeEmEstoque", "quantidade_em_estoque",
+            "criadoEm", "criado_em",
+            "atualizadoEm", "atualizado_em");
 
-    /** Grava o produto e sincroniza com o banco, preenchendo id, datas e versão. */
-    Produto salvar(Produto produto);
+    record Pagina(List<Produto> produtos, long total) {
+    }
+
+    /** @param ordenarPor uma das chaves de {@link #COLUNAS_ORDENAVEIS} */
+    Pagina listar(FiltroProdutos filtro, int pagina, int tamanho, String ordenarPor, boolean crescente);
 
     Optional<Produto> buscarPorId(UUID id);
 
+    /** Grava o produto; o banco registra a entrada "Estoque inicial" se a quantidade for maior que zero. */
+    Produto criar(Produto produto);
+
     /**
-     * Lista uma página de produtos.
+     * Grava os dados editáveis. Com {@code versaoEsperada}, só grava se o produto ainda estiver nessa versão.
      *
-     * @param busca     trecho procurado no nome ou na descrição, sem diferenciar maiúsculas; {@code null} lista todos
-     * @param ordenarPor uma das {@link #COLUNAS_ORDENAVEIS}
+     * @return vazio se o produto não existir ou estiver em outra versão
      */
-    List<Produto> listar(String busca, int pagina, int tamanho, String ordenarPor, boolean crescente);
+    Optional<Produto> atualizar(UUID id, Long versaoEsperada, Produto dados);
 
-    long contar(String busca);
+    /** Remove o produto e, em cascata, o histórico dele. */
+    boolean excluir(UUID id);
 
-    /** Calcula os indicadores do estoque; estoque baixo é de 1 até {@code limiteEstoqueBaixo} unidades. */
+    /** Indicadores dos produtos ativos; estoque baixo é de 1 até {@code limiteEstoqueBaixo} unidades. */
     ResumoEstoque resumir(int limiteEstoqueBaixo);
 
-    /** Grava as alterações e sincroniza com o banco, atualizando a data e a versão. */
-    Produto atualizar(Produto produto);
-
-    void remover(Produto produto);
+    /** Categorias em uso, em ordem alfabética e sem repetição. */
+    List<String> listarCategorias();
 }
