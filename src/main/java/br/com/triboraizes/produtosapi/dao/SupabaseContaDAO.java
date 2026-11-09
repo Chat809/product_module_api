@@ -51,6 +51,14 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
             uri.append("&vencimento=lte.{ate}");
             valores.put("ate", filtro.vencimentoAte());
         }
+        if (filtro.vinculoId() != null && tipo.colunaVinculo() != null) {
+            uri.append('&').append(tipo.colunaVinculo()).append("=eq.{vinculo}");
+            valores.put("vinculo", filtro.vinculoId());
+        }
+        if (filtro.centroCustoId() != null) {
+            uri.append("&centro_custo_id=eq.{centro}");
+            valores.put("centro", filtro.centroCustoId());
+        }
         String termo = termoDeBusca(filtro.busca());
         if (!termo.isEmpty()) {
             uri.append("&or={busca}");
@@ -137,6 +145,10 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
         dados.put("forma_pagamento", conta.formaPagamento().name());
         dados.put("chave_pix", conta.chavePix());
         dados.put("observacoes", conta.observacoes());
+        dados.put("centro_custo_id", conta.centroCustoId());
+        if (tipo.colunaVinculo() != null) {
+            dados.put(tipo.colunaVinculo(), conta.vinculoId());
+        }
         return dados;
     }
 
@@ -148,6 +160,7 @@ public class SupabaseContaDAO extends SupabaseTabela implements ContaDAO {
     private static String colunas(TipoConta tipo) {
         return "id,descricao,pessoa:" + tipo.colunaPessoa() + ",documento,categoria,valor,percentual_imposto,"
                 + "valor_imposto,valor_liquido,vencimento,data_baixa:" + tipo.colunaBaixa()
-                + ",status,forma_pagamento,chave_pix,observacoes,criado_por,criado_em,atualizado_em";
+                + ",status,forma_pagamento,chave_pix,observacoes,criado_por,criado_em,atualizado_em,centro_custo_id"
+                + (tipo.colunaVinculo() == null ? "" : ",vinculo_id:" + tipo.colunaVinculo());
     }
 }

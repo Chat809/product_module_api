@@ -91,9 +91,12 @@ public class FinanceiroController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate vencimentoDe,
             @Parameter(description = "Vencimento até (aaaa-mm-dd)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate vencimentoAte,
+            @Parameter(description = "Fornecedor (a pagar) ou cliente (a receber)") @RequestParam(required = false) UUID vinculoId,
+            @Parameter(description = "Centro de custo") @RequestParam(required = false) UUID centroCustoId,
             @Parameter(description = "Índice da página, começando em 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Itens por página (1 a 100)") @RequestParam(defaultValue = "20") int size) {
-        return contaService.listar(TipoConta.doCaminho(tipo), status, vencidas, busca, vencimentoDe, vencimentoAte, page, size);
+        return contaService.listar(TipoConta.doCaminho(tipo), status, vencidas, busca, vencimentoDe, vencimentoAte,
+                vinculoId, centroCustoId, page, size);
     }
 
     @GetMapping(TIPO + "/{id}")

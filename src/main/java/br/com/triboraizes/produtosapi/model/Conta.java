@@ -10,8 +10,8 @@ import java.util.UUID;
 
 /**
  * Linha de {@code contas_pagar} ou {@code contas_receber}. A consulta renomeia favorecido/pagador para
- * {@code pessoa} e data_pagamento/data_recebimento para {@code data_baixa}. Imposto e líquido são colunas
- * geradas pelo banco.
+ * {@code pessoa}, data_pagamento/data_recebimento para {@code data_baixa} e fornecedor_id/cliente_id para
+ * {@code vinculo_id}. Imposto e líquido são colunas geradas pelo banco.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record Conta(
@@ -32,6 +32,8 @@ public record Conta(
         String observacoes,
         @JsonProperty("criado_por") UUID criadoPor,
         @JsonProperty("criado_em") OffsetDateTime criadoEm,
-        @JsonProperty("atualizado_em") OffsetDateTime atualizadoEm
+        @JsonProperty("atualizado_em") OffsetDateTime atualizadoEm,
+        @JsonProperty("vinculo_id") UUID vinculoId,
+        @JsonProperty("centro_custo_id") UUID centroCustoId
 ) {
 }

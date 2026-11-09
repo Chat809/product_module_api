@@ -7,21 +7,24 @@ import java.util.Arrays;
  * (favorecido ou pagador), a coluna da data de baixa e o status de quitação.
  */
 public enum TipoConta {
-    PAGAR("contas-pagar", "contas_pagar", "favorecido", "data_pagamento", StatusConta.PAGO),
-    RECEBER("contas-receber", "contas_receber", "pagador", "data_recebimento", StatusConta.RECEBIDO);
+    PAGAR("contas-pagar", "contas_pagar", "favorecido", "data_pagamento", StatusConta.PAGO, "fornecedor_id"),
+    RECEBER("contas-receber", "contas_receber", "pagador", "data_recebimento", StatusConta.RECEBIDO, null);
 
     private final String caminho;
     private final String tabela;
     private final String colunaPessoa;
     private final String colunaBaixa;
     private final StatusConta statusQuitado;
+    private final String colunaVinculo;
 
-    TipoConta(String caminho, String tabela, String colunaPessoa, String colunaBaixa, StatusConta statusQuitado) {
+    TipoConta(String caminho, String tabela, String colunaPessoa, String colunaBaixa, StatusConta statusQuitado,
+              String colunaVinculo) {
         this.caminho = caminho;
         this.tabela = tabela;
         this.colunaPessoa = colunaPessoa;
         this.colunaBaixa = colunaBaixa;
         this.statusQuitado = statusQuitado;
+        this.colunaVinculo = colunaVinculo;
     }
 
     public String caminho() {
@@ -38,6 +41,11 @@ public enum TipoConta {
 
     public String colunaBaixa() {
         return colunaBaixa;
+    }
+
+    /** Cadastro ligado à conta: fornecedor (a pagar) ou cliente (a receber); {@code null} se não houver. */
+    public String colunaVinculo() {
+        return colunaVinculo;
     }
 
     public StatusConta statusQuitado() {

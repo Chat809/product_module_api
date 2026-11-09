@@ -30,7 +30,9 @@ public record ContaDTO(
         String observacoes,
         UUID criadoPor,
         Instant criadoEm,
-        Instant atualizadoEm
+        Instant atualizadoEm,
+        @Schema(description = "Fornecedor (a pagar) ou cliente (a receber) cadastrado", nullable = true) UUID vinculoId,
+        @Schema(nullable = true) UUID centroCustoId
 ) {
 
     public static ContaDTO from(Conta conta, LocalDate hoje) {
@@ -41,6 +43,7 @@ public record ContaDTO(
                 conta.vencimento(), conta.dataBaixa(), conta.status(), vencida, conta.formaPagamento(),
                 conta.chavePix(), conta.observacoes(), conta.criadoPor(),
                 conta.criadoEm() == null ? null : conta.criadoEm().toInstant(),
-                conta.atualizadoEm() == null ? null : conta.atualizadoEm().toInstant());
+                conta.atualizadoEm() == null ? null : conta.atualizadoEm().toInstant(),
+                conta.vinculoId(), conta.centroCustoId());
     }
 }

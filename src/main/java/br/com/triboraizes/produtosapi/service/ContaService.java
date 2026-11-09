@@ -43,6 +43,12 @@ public class ContaService {
 
     public PaginaDTO<ContaDTO> listar(TipoConta tipo, StatusConta status, boolean vencidas, String busca,
                                       LocalDate vencimentoDe, LocalDate vencimentoAte, int pagina, int tamanho) {
+        return listar(tipo, status, vencidas, busca, vencimentoDe, vencimentoAte, null, null, pagina, tamanho);
+    }
+
+    public PaginaDTO<ContaDTO> listar(TipoConta tipo, StatusConta status, boolean vencidas, String busca,
+                                      LocalDate vencimentoDe, LocalDate vencimentoAte, UUID vinculoId,
+                                      UUID centroCustoId, int pagina, int tamanho) {
         if (pagina < 0 || tamanho < 1 || tamanho > TAMANHO_MAXIMO_PAGINA) {
             throw new RequisicaoInvalidaException("Use 'page' a partir de 0 e 'size' entre 1 e " + TAMANHO_MAXIMO_PAGINA);
         }
@@ -54,7 +60,8 @@ public class ContaService {
         }
         LocalDate hoje = hoje();
         ContaDAO.Pagina resultado = contaDAO.listar(tipo,
-                new FiltroContas(status, vencidas, busca, vencimentoDe, vencimentoAte, hoje), pagina, tamanho);
+                new FiltroContas(status, vencidas, busca, vencimentoDe, vencimentoAte, hoje, vinculoId, centroCustoId),
+                pagina, tamanho);
         return PaginaDTO.of(resultado.contas(), conta -> ContaDTO.from(conta, hoje), pagina, tamanho, resultado.total());
     }
 
@@ -119,7 +126,8 @@ public class ContaService {
         BigDecimal percentual = request.percentualImposto() == null ? BigDecimal.ZERO : request.percentualImposto();
         return new Conta(null, request.descricao().trim(), request.pessoa().trim(), opcional(request.documento()),
                 opcional(request.categoria()), request.valor(), percentual, null, null, request.vencimento(), null,
-                null, request.formaPagamento(), chavePix, opcional(request.observacoes()), criadoPor, null, null);
+                null, request.formaPagamento(), chavePix, opcional(request.observacoes()), criadoPor, null, null,
+                request.vinculoId(), request.centroCustoId());
     }
 
     private static void validarStatus(TipoConta tipo, StatusConta status) {

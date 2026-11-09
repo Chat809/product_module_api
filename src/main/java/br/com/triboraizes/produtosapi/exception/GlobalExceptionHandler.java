@@ -60,6 +60,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(RegistroNaoEncontradoException.class)
+    public ProblemDetail handleRegistroNaoEncontrado(RegistroNaoEncontradoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle(ex.titulo());
+        return problem;
+    }
+
+    @ExceptionHandler(ConflitoDeDadosException.class)
+    public ProblemDetail handleConflitoDeDados(ConflitoDeDadosException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle(ex.titulo());
+        return problem;
+    }
+
     @ExceptionHandler(RequisicaoInvalidaException.class)
     public ProblemDetail handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());

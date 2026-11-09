@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Schema(description = "Lançamento de conta a pagar ou a receber")
 public record ContaRequestDTO(
@@ -61,6 +62,12 @@ public record ContaRequestDTO(
 
         @Schema(nullable = true)
         @Size(max = 1000, message = "As observações devem ter no máximo 1000 caracteres")
-        String observacoes
+        String observacoes,
+
+        @Schema(description = "A pagar: fornecedor cadastrado. A receber: cliente cadastrado. Opcional.", nullable = true)
+        UUID vinculoId,
+
+        @Schema(description = "Centro de custo, opcional", nullable = true)
+        UUID centroCustoId
 ) {
 }
