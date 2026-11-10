@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dao.ProdutoDAO;
 import br.com.triboraizes.produtosapi.dto.MovimentacaoRequestDTO;
 import br.com.triboraizes.produtosapi.dto.MovimentacaoResponseDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
+import br.com.triboraizes.produtosapi.evento.EventoDeNegocio;
 import br.com.triboraizes.produtosapi.exception.ProdutoNaoEncontradoException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
 import br.com.triboraizes.produtosapi.factory.DAOFactory;
@@ -12,8 +13,11 @@ import br.com.triboraizes.produtosapi.model.MovimentacaoEstoque;
 import br.com.triboraizes.produtosapi.model.TipoMovimentacao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -25,10 +29,15 @@ public class MovimentacaoService {
 
     private final ProdutoDAO produtoDAO;
     private final MovimentacaoDAO movimentacaoDAO;
+    private final ApplicationEventPublisher eventos;
+    private final int limiteEstoqueBaixo;
 
-    public MovimentacaoService(DAOFactory daoFactory) {
+    public MovimentacaoService(DAOFactory daoFactory, ApplicationEventPublisher eventos,
+                               @Value("${app.estoque.limite-baixo:5}") int limiteEstoqueBaixo) {
         this.produtoDAO = daoFactory.criarProdutoDAO();
         this.movimentacaoDAO = daoFactory.criarMovimentacaoDAO();
+        this.eventos = eventos;
+        this.limiteEstoqueBaixo = limiteEstoqueBaixo;
     }
 
     /** O saldo é conferido pelo banco com o produto travado, então duas saídas simultâneas não deixam o estoque negativo. */
@@ -44,7 +53,14 @@ public class MovimentacaoService {
 
         log.info("Movimentação registrada: produto={}, tipo={}, quantidade={}, saldo={}",
                 produtoId, request.tipo(), request.quantidade(), movimentacao.saldoApos());
-        return MovimentacaoResponseDTO.from(movimentacao);
+        MovimentacaoResponseDTO dto = MovimentacaoResponseDTO.from(movimentacao);
+        if (request.tipo() == TipoMovimentacao.SAIDA && movimentacao.saldoApos() != null
+                && movimentacao.saldoApos() <= limiteEstoqueBaixo) {
+            eventos.publishEvent(new EventoDeNegocio(EventoDeNegocio.PRODUTO_ESTOQUE_BAIXO,
+                    Map.of("produtoId", produtoId, "saldo", movimentacao.saldoApos(), "limite", limiteEstoqueBaixo,
+                            "movimentacao", dto)));
+        }
+        return dto;
     }
 
     public PaginaDTO<MovimentacaoResponseDTO> listar(UUID produtoId, int pagina, int tamanho) {

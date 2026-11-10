@@ -5,6 +5,7 @@ import br.com.triboraizes.produtosapi.dto.ContaDTO;
 import br.com.triboraizes.produtosapi.dto.ContaRequestDTO;
 import br.com.triboraizes.produtosapi.dto.PaginaDTO;
 import br.com.triboraizes.produtosapi.dto.ResumoFinanceiroDTO;
+import br.com.triboraizes.produtosapi.evento.EventoDeNegocio;
 import br.com.triboraizes.produtosapi.exception.ContaNaoEncontradaException;
 import br.com.triboraizes.produtosapi.exception.OperacaoNaoPermitidaException;
 import br.com.triboraizes.produtosapi.exception.RequisicaoInvalidaException;
@@ -15,11 +16,13 @@ import br.com.triboraizes.produtosapi.model.StatusConta;
 import br.com.triboraizes.produtosapi.model.TipoConta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -35,10 +38,12 @@ public class ContaService {
 
     private final ContaDAO contaDAO;
     private final Clock relogio;
+    private final ApplicationEventPublisher eventos;
 
-    public ContaService(ContaDAO contaDAO, Clock relogio) {
+    public ContaService(ContaDAO contaDAO, Clock relogio, ApplicationEventPublisher eventos) {
         this.contaDAO = contaDAO;
         this.relogio = relogio;
+        this.eventos = eventos;
     }
 
     public PaginaDTO<ContaDTO> listar(TipoConta tipo, StatusConta status, boolean vencidas, String busca,
@@ -92,7 +97,9 @@ public class ContaService {
         Conta quitada = contaDAO.alterarStatus(tipo, id, tipo.statusQuitado(), dataBaixa)
                 .orElseThrow(() -> new ContaNaoEncontradaException(id));
         log.info("Baixa registrada: tipo={}, id={}, data={}, por={}", tipo, id, dataBaixa, solicitante);
-        return ContaDTO.from(quitada, hoje);
+        ContaDTO dto = ContaDTO.from(quitada, hoje);
+        eventos.publishEvent(new EventoDeNegocio(EventoDeNegocio.CONTA_PAGA, Map.of("tipo", tipo.caminho(), "conta", dto)));
+        return dto;
     }
 
     public ContaDTO cancelar(TipoConta tipo, UUID id, UUID solicitante) {

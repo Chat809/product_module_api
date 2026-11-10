@@ -74,6 +74,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(CargaGrandeDemaisException.class)
+    public ProblemDetail handleCargaGrandeDemais(CargaGrandeDemaisException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, ex.getMessage());
+        problem.setTitle("Requisição grande demais");
+        return problem;
+    }
+
     @ExceptionHandler(RequisicaoInvalidaException.class)
     public ProblemDetail handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
