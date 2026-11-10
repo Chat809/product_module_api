@@ -21,9 +21,6 @@ import br.com.triboraizes.produtosapi.model.ReclamacaoEvento;
 import br.com.triboraizes.produtosapi.model.WebhookEntrada;
 import br.com.triboraizes.produtosapi.model.WebhookEntrega;
 import br.com.triboraizes.produtosapi.model.WebhookSaida;
-import br.com.triboraizes.produtosapi.model.WebhookEntrada;
-import br.com.triboraizes.produtosapi.model.WebhookEntrega;
-import br.com.triboraizes.produtosapi.model.WebhookSaida;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -93,18 +90,6 @@ public class DAOFactory {
     public CadastroDAO<PreferenciaNotificacao> criarPreferenciaNotificacaoDAO() {
         return cadastro("preferencias_notificacao", PreferenciaNotificacao.COLUNAS, "a preferência",
                 PreferenciaNotificacao.class);
-    }
-
-    public CadastroDAO<WebhookSaida> criarWebhookSaidaDAO() {
-        return cadastro("webhooks_saida", WebhookSaida.COLUNAS, "o webhook", WebhookSaida.class);
-    }
-
-    public CadastroDAO<WebhookEntrega> criarWebhookEntregaDAO() {
-        return cadastro("webhook_entregas", WebhookEntrega.COLUNAS, "a entrega", WebhookEntrega.class);
-    }
-
-    public CadastroDAO<WebhookEntrada> criarWebhookEntradaDAO() {
-        return cadastro("webhooks_entrada", WebhookEntrada.COLUNAS, "o webhook de entrada", WebhookEntrada.class);
     }
 
     public CadastroDAO<WebhookSaida> criarWebhookSaidaDAO() {
