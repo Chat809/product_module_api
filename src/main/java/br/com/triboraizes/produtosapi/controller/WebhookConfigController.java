@@ -90,9 +90,9 @@ public class WebhookConfigController {
     @Operation(summary = "Log de entregas (30 dias), das mais recentes para as mais antigas")
     public PaginaDTO<WebhookEntrega> entregas(@RequestParam(required = false) UUID webhookId,
                                               @RequestParam(required = false) Boolean sucesso,
-                                              @RequestParam(defaultValue = "0") int pagina,
-                                              @RequestParam(defaultValue = "20") int tamanho) {
-        return service.entregas(webhookId, sucesso, pagina, tamanho);
+                                              @RequestParam(defaultValue = "0") int page,
+                                              @RequestParam(defaultValue = "20") int size) {
+        return service.entregas(webhookId, sucesso, page, size);
     }
 
     @GetMapping("/entrada")

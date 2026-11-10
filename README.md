@@ -6,13 +6,13 @@
 ![Testes](https://img.shields.io/badge/testes-250%20passando-success)
 ![Cobertura](https://img.shields.io/badge/cobertura%20de%20linhas-98%25-success)
 
-API REST de produtos e estoque feita para o teste técnico de Desenvolvedor Backend Java. Cumpre o que o PDF pede (CRUD de produtos com Spring Boot, H2, DAO, Factory, DTO e testes dos serviços) e, a partir de sugestões feitas durante o desenvolvimento, ganhou autenticação, acessos por módulo, gestão de usuários, perfil com foto, demandas em Kanban e um módulo financeiro.
+API REST de produtos e estoque feita para o teste técnico de Desenvolvedor Backend Java. Cumpre o que o PDF pede (CRUD de produtos com Spring Boot, H2, DAO, Factory, DTO e testes dos serviços) e, a partir de sugestões feitas durante o desenvolvimento, ganhou autenticação, acessos por subaba, gestão de usuários, perfil com foto, demandas em Kanban, financeiro (com fornecedores e centros de custo), CRM (clientes, funil de leads e reclamações), notificações, webhooks e relatórios com exportação em CSV.
 
 ## Sumário
 
 - [Links rápidos](#links-rápidos)
 - [Requisitos do teste técnico (PDF original)](#requisitos-do-teste-técnico-pdf-original)
-- [Funcionalidades extras](#funcionalidades-extras): [paginação](#1-paginação-busca-e-ordenação) · [ETag](#2-edição-concorrente-com-etag) · [movimentações](#3-movimentações-de-estoque) · [resumo](#4-resumo-para-dashboard) · [autenticação](#5-autenticação-e-mail-e-senha-e-login-com-google) · [acessos](#6-papéis-e-acessos-por-módulo) · [usuários](#7-gestão-de-usuários-pelo-admin) · [perfil](#8-meu-perfil-e-avatar) · [demandas](#9-demandas-e-tarefas) · [financeiro](#10-financeiro-contas-a-pagar-e-a-receber)
+- [Funcionalidades extras](#funcionalidades-extras): [paginação](#1-paginação-busca-e-ordenação) · [ETag](#2-edição-concorrente-com-etag) · [movimentações](#3-movimentações-de-estoque) · [resumo](#4-resumo-para-dashboard) · [autenticação](#5-autenticação-e-mail-e-senha-e-login-com-google) · [acessos](#6-papéis-e-acessos-por-módulo) · [usuários](#7-gestão-de-usuários-pelo-admin) · [perfil](#8-meu-perfil-e-avatar) · [demandas](#9-demandas-e-tarefas) · [financeiro](#10-financeiro-contas-a-pagar-e-a-receber) · [fornecedores e centros de custo](#11-fornecedores-e-centros-de-custo) · [CRM](#12-crm-clientes-leads-e-reclamações) · [notificações](#13-notificações) · [webhooks](#14-webhooks-e-integrações) · [relatórios](#15-relatórios)
 - [Referência técnica](#referência-técnica): [stack](#stack) · [como executar](#como-executar) · [testes](#testes) · [erros](#formato-dos-erros) · [arquitetura](#arquitetura) · [REST e SOLID](#rest-e-solid) · [segurança](#segurança) · [deploy](#deploy-no-render) · [referências](#referências)
 
 ## Links rápidos
@@ -114,23 +114,27 @@ Produtos ficam no H2, como o PDF pede. Tudo o que precisa sobreviver a um reiní
 
 **Por que assim:** o painel não conhece nenhuma chave do Supabase, só a API conhece. PKCE foi pedido por você para que o token nunca apareça na URL. Configuração do Google: Client ID e Client Secret só no Supabase (*Authentication > Providers > Google*) e `<painel>/auth/callback` nas Redirect URLs.
 
-### 6. Papéis e acessos por módulo
+### 6. Papéis e acessos por subaba
 
-**O que faz:** cada usuário tem um nível de acesso, o campo `papel`, que só aceita dois valores: `ADMIN` (Administrador) ou `USUARIO` (Usuário). Também tem uma lista de módulos liberados: `dashboard`, `produtos`, `demandas`, `financeiro`, `usuarios` ou `["*"]` (acesso total). O que não foi liberado responde 403.
+**O que faz:** cada usuário tem um nível de acesso, o campo `papel`, que só aceita `ADMIN` (Administrador) ou `USUARIO` (Usuário), e uma lista de subabas liberadas no formato `modulo/subaba`. Os módulos são Início, Estoque, Demandas, Financeiro, CRM, Relatórios e Configurações; cada um tem suas subabas (por exemplo `financeiro/contas-pagar`, `crm/leads`, `relatorios/comercial`). `["*"]` é acesso total e o nome do módulo sozinho (`financeiro`) libera todas as subabas dele. O que não foi liberado responde 403.
 
 | Rota | Exige |
 |---|---|
-| `GET /produtos/resumo` | `dashboard` |
-| `GET /produtos/**` | `dashboard` ou `produtos` |
-| Escrita em `/produtos/**` | `produtos` |
-| `/demandas/**` e `GET /usuarios/opcoes` | `demandas` |
-| `/financeiro/**` | `financeiro` |
-| `/usuarios/me/**` | qualquer usuário logado |
-| Demais `/usuarios/**` | papel `ADMIN` |
+| `GET /produtos/resumo` | `inicio/dashboard` |
+| `/produtos/**` | `estoque/produtos` (leitura também com `inicio/dashboard`) |
+| `/demandas/**` | `demandas/quadro` |
+| `/financeiro/contas-pagar/**`, `/contas-receber/**`, `/fornecedores/**`, `/centros-custo/**` | a subaba correspondente de Financeiro |
+| Leitura de fornecedores e centros de custo | qualquer subaba de Financeiro (aparecem como opções nos lançamentos) |
+| `/crm/clientes/**`, `/crm/leads/**`, `/crm/reclamacoes/**` | a subaba correspondente do CRM (leitura de clientes também com Financeiro) |
+| `GET /crm/parametros/**` | qualquer subaba do CRM |
+| `/relatorios/{tipo}/**` | `relatorios/{tipo}` |
+| `/notificacoes/**`, `/usuarios/me/**` | qualquer usuário logado |
+| `/usuarios/**`, escrita em `/crm/parametros/**`, `/configuracoes/webhooks/**`, `/configuracoes/integracoes/**` | a subaba de Configurações correspondente, que só um admin pode ter |
+| `POST /webhooks/entrada/{token}` | público; o token na URL identifica a integração |
 
-**Como foi construída:** papel e acessos ficam em `public.perfis`. Um trigger copia os dois para o `app_metadata` do usuário, que vai no JWT e que ele não consegue alterar. O `PermissoesDoTokenConverter` transforma isso em `ROLE_*` e `MODULO_*`, exigidos rota a rota no `SecurityConfig`. Uma `check constraint` recusa valores desconhecidos. Conta nova recebe `["dashboard", "produtos", "demandas"]`.
+**Como foi construída:** papel e acessos ficam em `public.perfis`. Um trigger copia os dois para o `app_metadata` do usuário, que vai no JWT e que ele não consegue alterar. O `PermissoesDoTokenConverter` transforma isso em `ROLE_*`, `MODULO_*` e `SUB_*`, exigidos rota a rota no `SecurityConfig`. O enum `Submodulo` é a lista única de subabas; `Acessos` normaliza o que é gravado e aceita as chaves antigas (`dashboard`, `produtos`...), para perfis e tokens anteriores continuarem valendo.
 
-**Por que assim:** `*` como acesso total foi pedido por você. Financeiro fica fora do padrão, também por escolha sua, e só entra quando o admin libera. `usuarios` é exclusivo de admin, e admin tem sempre `*`. Acessos novos valem no próximo login ou renovação (até 1 hora).
+**Por que assim:** permissão por subaba foi a sua escolha: dá para liberar só Contas a receber, sem Contas a pagar, por exemplo. Subabas de Configurações que mexem no sistema inteiro (usuários, parâmetros do CRM, webhooks, integrações) são só de admin; Notificações vale para todos, porque cada um escolhe as próprias. Acessos novos valem no próximo login ou renovação (até 1 hora).
 
 ### 7. Gestão de usuários pelo admin
 
@@ -202,13 +206,112 @@ Produtos ficam no H2, como o PDF pede. Tudo o que precisa sobreviver a um reiní
 
 **Por que assim:** imposto como percentual, com o líquido calculado no banco, foi o que você pediu; assim nenhum cliente consegue gravar um líquido inconsistente. Os totais usam o líquido, que é o que de fato entra ou sai do caixa. Exige o módulo `financeiro`, que contas novas não recebem.
 
+### 11. Fornecedores e centros de custo
+
+**O que faz:** cadastro de fornecedores (razão social, nome fantasia, CPF/CNPJ, contato, chave Pix, categoria) e de centros de custo (código e nome). Uma conta a pagar pode apontar para um fornecedor, uma conta a receber para um cliente do CRM, e as duas para um centro de custo.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/financeiro/fornecedores?busca=&ativo=&page=&size=` e `/centros-custo` | Listas paginadas com busca |
+| `GET` | `.../opcoes` | Só os ativos, para os seletores dos lançamentos |
+| `POST`, `PUT`, `DELETE` | `/api/v1/financeiro/fornecedores` e `/centros-custo` (com `/{id}`) | CRUD; documento repetido → 409; excluir item em uso → 409 (inative-o) |
+
+**Como foi construída:** um DAO genérico (`CadastroDAO<T>` com `SupabaseCadastroDAO`) atende todos os cadastros novos. Ele traduz os erros do Postgres em respostas de negócio: valor repetido ou registro em uso dão 409, `check` violado dá 400 e erro levantado por função do banco dá 422 com a mensagem dela.
+
+**Por que assim:** os cadastros novos têm a mesma forma (listar, buscar, criar, editar, excluir), então uma implementação só evita dezenas de classes iguais; cada serviço continua com suas regras.
+
+### 12. CRM: clientes, leads e reclamações
+
+**O que faz:**
+- **Clientes:** pessoa física ou jurídica, com CPF/CNPJ único, contato, endereço e responsável. A ficha reúne interações (ligação, e-mail, reunião, WhatsApp, nota), reclamações e contas a receber.
+- **Leads:** funil em Kanban com etapas configuráveis (Novo, Em contato, Proposta, Ganho, Perdido), origem, valor estimado e próxima ação. Mover para uma etapa de perda pede o motivo. "Converter" cria o cliente a partir do lead e leva o lead à etapa de ganho.
+- **Reclamações:** protocolo automático (`REC-2026-00001`), canal, prioridade, prazo, responsável e histórico. O status vai de Aberta para Em análise, Resolvida ou Encerrada; resolver exige a solução.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/v1/crm/clientes` | CRUD com busca; `GET /{id}/interacoes` e `/{id}/reclamacoes` montam a ficha |
+| `GET` | `/api/v1/crm/leads/funil` | Leads do quadro, na ordem dos cartões |
+| `PATCH` | `/api/v1/crm/leads/{id}/etapa` | `{ etapaId, ordem, motivoPerda }`: move o cartão |
+| `POST` | `/api/v1/crm/leads/{id}/converter` | Cria o cliente; lead já convertido → 422 |
+| `GET` | `/api/v1/crm/reclamacoes/quadro` | Reclamações agrupáveis por status |
+| `PATCH` | `/api/v1/crm/reclamacoes/{id}/status` | `{ status, solucao, comentario }` |
+| `GET`, `POST` | `/api/v1/crm/reclamacoes/{id}/historico` e `/comentarios` | Linha do tempo e comentários |
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/v1/crm/parametros/etapas` e `/origens` | Etapas do funil e origens de leads |
+
+**Como foi construída:** tabelas `clientes`, `leads`, `crm_etapas`, `crm_origens`, `crm_interacoes`, `reclamacoes` e `reclamacao_eventos`. Triggers geram o protocolo, preenchem a data de resolução e gravam o histórico de cada mudança de status. A conversão é a função `converter_lead`, que cria o cliente e move o lead na mesma transação. A ordem dos cartões é um número decimal: soltar entre dois cartões usa a média dos vizinhos, sem renumerar a coluna.
+
+**Por que assim:** o histórico gravado pelo banco não depende de quem chamou a API. A conversão numa função só não deixa cliente sem lead convertido (ou o contrário) se algo falhar no meio.
+
+### 13. Notificações
+
+**O que faz:** o sino da barra superior mostra avisos de lead atribuído, reclamação aberta ou atribuída, demanda atribuída, conta vencendo amanhã e conta vencida. Cada pessoa escolhe em Configurações > Notificações o que quer receber.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/notificacoes?naoLidas=&page=&size=` | Notificações da própria pessoa |
+| `GET` | `/api/v1/notificacoes/nao-lidas` | `{ total }` para o número do sino |
+| `PATCH` | `/api/v1/notificacoes/{id}/lida` e `/lidas` | Marca uma ou todas como lidas |
+| `GET`, `PUT` | `/api/v1/notificacoes/preferencias` | No painel e por e-mail, por tipo |
+
+**Como foi construída:** as notificações nascem no banco. Triggers em `leads`, `reclamacoes` e `demandas` chamam a função `notificar`, que respeita as preferências e só avisa quem tem a subaba correspondente. Os vencimentos são verificados todo dia às 8h (horário de Brasília) por um job do `pg_cron`. A chave única `(usuario_id, chave)` impede aviso repetido.
+
+**Por que assim:** gerar no banco cobre qualquer caminho que altere os dados. O e-mail fica desligado (`EMAIL_HABILITADO=false`) até existir um provedor SMTP; as escolhas já ficam gravadas.
+
+### 14. Webhooks e integrações
+
+**O que faz:** em Configurações > Webhooks, o admin cadastra:
+- **Webhooks de saída:** um endereço `https://` recebe um `POST` com JSON quando acontecem os eventos escolhidos: `cliente.criado`, `lead.criado`, `lead.etapa_alterada`, `lead.convertido`, `reclamacao.aberta`, `reclamacao.status_alterado`, `conta.paga` e `produto.estoque_baixo`.
+- **Webhooks de entrada:** um endereço próprio que outro sistema (o formulário do site, por exemplo) chama para criar leads.
+
+Configurações > Integrações mostra a situação do Supabase, do login com Google, do e-mail e dos webhooks, sem chaves.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/v1/configuracoes/webhooks/saida` | CRUD; o segredo vem completo só na criação |
+| `POST` | `/api/v1/configuracoes/webhooks/saida/{id}/segredo` | Gera outro segredo |
+| `POST` | `/api/v1/configuracoes/webhooks/saida/{id}/teste` | Envia um evento `teste` e devolve o resultado |
+| `GET` | `/api/v1/configuracoes/webhooks/entregas?webhookId=&sucesso=&page=&size=` | Log das entregas (30 dias) |
+| `GET`, `POST`, `PUT`, `DELETE` | `/api/v1/configuracoes/webhooks/entrada` | CRUD; o token vem completo só na criação |
+| `POST` | `/api/v1/configuracoes/webhooks/entrada/{id}/token` | Gera outro token (muda o endereço) |
+| `POST` | `/api/v1/webhooks/entrada/{token}` | Público: `{ nome, empresa, email, telefone, valorEstimado, mensagem }` → 202 com `leadId`; corpo acima de 16 KB → 413; token inválido → 404 |
+| `GET` | `/api/v1/configuracoes/integracoes` | Situação de cada integração |
+
+Cada envio leva os cabeçalhos `X-Tribo-Evento`, `X-Tribo-Entrega`, `X-Tribo-Timestamp` e `X-Tribo-Assinatura: sha256=<HMAC-SHA256 de "<timestamp>.<corpo>" com o segredo>`. Para conferir no destino:
+
+```js
+const esperado = 'sha256=' + crypto.createHmac('sha256', segredo).update(`${timestamp}.${corpoBruto}`).digest('hex');
+```
+
+**Como foi construída:** os serviços publicam um `EventoDeNegocio` (Spring `ApplicationEventPublisher`); o `WebhookDisparador` escuta com `@Async`, busca os webhooks ativos que assinam o evento e envia com até 3 tentativas (esperas de 2 s e 8 s). Cada entrega, com status, tentativas, duração e erro, vai para `webhook_entregas`, limpo após 30 dias por um job do `pg_cron`. O endereço de entrada lê o corpo com limite, valida os campos e cria o lead na primeira etapa aberta do funil, com uma nota indicando a integração.
+
+**Por que assim:** assíncrono para a requisição de quem salvou não esperar o destino responder. A assinatura com timestamp deixa o destino confirmar a origem e recusar reenvios antigos. O disparador não segue redirecionamentos e recusa destinos na rede interna (localhost, faixas privadas, link-local), para que um webhook não sirva de ponte para dentro do servidor. Segredos e tokens são mascarados nas listas e trocáveis a qualquer momento.
+
+### 15. Relatórios
+
+**O que faz:** quatro relatórios, cada um numa subaba com permissão própria:
+- **Financeiro:** recebido, pago, saldo, previsto e vencido; despesas por categoria e por centro de custo; fluxo mensal e maiores favorecidos.
+- **Comercial:** leads criados, convertidos, taxa de conversão, valor convertido, perdidos e novos clientes; leads por origem, funil atual, motivos de perda e desempenho por responsável.
+- **Estoque:** produtos, unidades, valor a custo e a preço de venda, estoque baixo e zerado; valor por categoria, mais retirados em 30 dias e lista de reposição.
+- **Atendimento:** abertas, resolvidas, tempo médio de resolução, resolvidas no prazo, em aberto e atrasadas; por prioridade, canal e situação; desempenho por responsável.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/relatorios/{tipo}?inicio=2026-11-01&fim=2026-11-30` | Indicadores, gráficos e tabelas; sem datas, o mês corrente; período de até 3 anos |
+| `GET` | `/api/v1/relatorios/{tipo}/csv?inicio=&fim=` | O mesmo relatório em CSV |
+
+`{tipo}` é `financeiro`, `comercial`, `estoque` ou `atendimento`. O de estoque é uma foto do momento e ignora o período.
+
+**Como foi construída:** cada relatório é uma função do banco (`relatorio_financeiro`, `relatorio_comercial`, `relatorio_estoque`, `relatorio_atendimento`) que devolve um JSON no mesmo formato: `indicadores`, `graficos` (barras) e `tabelas`, cada valor com seu `formato` (`moeda`, `numero`, `percentual`, `dias`, `texto`). Datas de registros com horário são contadas no fuso de Brasília. O CSV usa `;` e vírgula decimal, com BOM UTF-8, para abrir direto no Excel em português, e protege contra fórmulas em células de texto.
+
+**Por que assim:** agregar no banco evita trazer milhares de linhas para a API. O formato único deixa o painel desenhar qualquer relatório com o mesmo componente e a exportação funcionar igual para todos.
+
 ## Referência técnica
 
 ### Stack
 
 - Java 21 e Spring Boot 4.1.2 (Web MVC, Data JPA, Bean Validation, Actuator, Security como OAuth2 Resource Server)
 - H2 em memória para produtos e movimentações
-- Supabase: Auth (usuários), Postgres via PostgREST (perfis, demandas, contas) e Storage (fotos)
+- Supabase: Auth (usuários), Postgres via PostgREST (perfis, demandas, financeiro, CRM, notificações, webhooks e funções de relatório), `pg_cron` (avisos de vencimento e limpeza do log de webhooks) e Storage (fotos)
 - springdoc-openapi (Swagger UI)
 - JUnit 5, Mockito, AssertJ e JaCoCo; Maven Wrapper
 
@@ -247,7 +350,7 @@ Sem a chave, a aplicação sobe, mas login e os módulos do Supabase respondem 5
 ./mvnw clean verify             # Windows: .\mvnw.cmd clean verify
 ```
 
-São 250 testes. O build gera `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje em 98%). Nenhum teste acessa o Supabase: as chamadas HTTP são simuladas com `MockRestServiceServer`.
+São 250 testes, que cobrem os módulos até o financeiro. Fornecedores, centros de custo, CRM, notificações, webhooks e relatórios foram entregues sem testes automatizados, por decisão sua; os comandos abaixo continuam valendo para o que já existia. O build gera `target/site/jacoco/index.html` e **falha se a cobertura de linhas ficar abaixo de 80%** (hoje em 98%). Nenhum teste acessa o Supabase: as chamadas HTTP são simuladas com `MockRestServiceServer`.
 
 | Classe de teste | O que cobre |
 |---|---|
@@ -286,7 +389,8 @@ Outros status: 401 (sem token), 403 (sem o módulo ou papel), 404, 409 (edição
 br.com.triboraizes.produtosapi
 ├── config        OpenAPI, CORS, segurança, relógio (fuso de Brasília), Supabase e dados iniciais
 ├── controller    Endpoints REST (só HTTP, sem regra de negócio)
-├── service       Regras de negócio e transações
+├── evento        EventoDeNegocio e os tipos de evento entregues aos webhooks
+├── service       Regras de negócio, transações, disparo de webhooks e relatórios
 ├── dao           Contratos e implementações: JPA (produtos) e Supabase (perfis, demandas, contas)
 ├── factory       DAOFactory: criação dos DAOs JPA
 ├── client        SupabaseAuthClient e SupabaseStorageClient
@@ -328,7 +432,7 @@ br.com.triboraizes.produtosapi
 | Client ID e Client Secret do Google | Só no Supabase |
 | Senhas dos usuários | Só como hash no Supabase Auth |
 
-Variáveis de ambiente: `SUPABASE_SECRET_KEY` (obrigatória para login e módulos do Supabase), `SUPABASE_URL` (tem padrão), `CORS_ALLOWED_ORIGINS`, `DADOS_INICIAIS` e `PORT`. O painel conhece só a URL pública do Supabase.
+Variáveis de ambiente: `SUPABASE_SECRET_KEY` (obrigatória para login e módulos do Supabase), `SUPABASE_URL` (tem padrão), `CORS_ALLOWED_ORIGINS`, `DADOS_INICIAIS`, `EMAIL_HABILITADO` (padrão `false`; ligar só com um provedor SMTP configurado) e `PORT`. O painel conhece só a URL pública do Supabase.
 
 **Proteções**
 
@@ -338,6 +442,8 @@ Variáveis de ambiente: `SUPABASE_SECRET_KEY` (obrigatória para login e módulo
 - Dados mínimos: `/usuarios/opcoes` devolve só id, nome e foto; contas e chaves Pix só com o módulo `financeiro`.
 - Logs registram id ou e-mail, nunca tokens, código do Google, verificador PKCE, chave ou corpo de resposta do Supabase.
 - Bean Validation em todos os campos, JPQL parametrizada e ordenação por lista fechada.
+- Webhooks: assinatura HMAC-SHA256 com timestamp, só `https://`, sem seguir redirecionamentos e sem destinos na rede interna; segredos e tokens gerados com `SecureRandom`, mascarados nas listas e trocáveis. O endereço público de entrada aceita no máximo 16 KB, valida cada campo e responde 404 sem detalhes para token inválido ou inativo.
+- Relatórios em CSV com proteção contra fórmulas (texto que começa com `=`, `+`, `-` ou `@` vira texto literal).
 - CORS restrito às origens do painel; erros sem stack trace; console H2 só em `dev`; Actuator só com `/health`; container sem root; ids UUID.
 
 **O que não existe, e por quê:** não há rate limit próprio (o Supabase Auth já limita tentativas de login), revogação imediata de token (expira em 1 hora) nem cofre de segredos (uma única chave no Render). Em produção, entrariam Bucket4j ou gateway, tokens mais curtos e um gerenciador de segredos com rotação.
