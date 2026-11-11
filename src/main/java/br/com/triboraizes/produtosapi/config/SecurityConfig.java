@@ -31,7 +31,7 @@ import java.util.Collection;
  * A API é um resource server: valida o JWT emitido pelo Supabase Auth (ES256, chaves públicas do JWKS)
  * e não guarda sessão. Cada rota exige a subaba correspondente ({@code SUB_*}); leituras usadas como opções em
  * outras telas exigem só o módulo ({@code MODULO_*}). "Meu perfil" e notificações valem para qualquer usuário logado,
- * e o webhook de entrada é público, autenticado pelo token da própria URL. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
+ * o webhook de entrada é público, autenticado pelo token da própria URL, e o download de arquivo é aberto. Erros 401 e 403 são repassados ao {@code GlobalExceptionHandler} para sair em ProblemDetail.
  */
 @Configuration
 @EnableConfigurationProperties(SupabaseProperties.class)
@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health", "/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/entrada/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/download").permitAll()
                         .requestMatchers("/api/v1/usuarios/me", "/api/v1/usuarios/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/usuarios/opcoes")
                         .hasAnyAuthority(Modulo.DEMANDAS.autoridade(), Modulo.CRM.autoridade())
