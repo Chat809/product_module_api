@@ -16,6 +16,13 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Download público: liberado para qualquer origem, pois a página de download pode ser hospedada em qualquer lugar.
+        // Precisa vir antes do mapeamento geral para ter prioridade no casamento de rota.
+        registry.addMapping("/api/v1/download")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "OPTIONS")
+                .exposedHeaders("Content-Disposition");
+
         registry.addMapping("/api/**")
                 .allowedOriginPatterns(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
